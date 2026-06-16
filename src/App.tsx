@@ -1,20 +1,21 @@
 /**
- * Top-level shell for the shared world. Handles the intro, the visitor's
- * identity token, the builder overlay, and focusing a newly released creature.
- * The world itself lives on the server; this is just the window onto it.
+ * Top-level shell. Original-style flow: intro → your creature roster → click a
+ * creature for its dossier. The world simulates on the server; this is the
+ * window onto your bloodlines.
  */
 import { useCallback, useEffect, useState } from "react";
 import Builder from "./components/Builder";
+import CreatureDetail from "./components/CreatureDetail";
 import Intro from "./components/Intro";
-import WorldView, { FocusRequest } from "./components/WorldView";
+import Roster from "./components/Roster";
 import { MeInfo, ReleaseResult, api, tokenStore } from "./net/api";
 
 export default function App() {
   const [started, setStarted] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
-  const [focus, setFocus] = useState<FocusRequest | null>(null);
   const [token, setToken] = useState<string | null>(() => tokenStore.get());
   const [me, setMe] = useState<MeInfo | null>(null);
+  const [selectedCreatureId, setSelectedCreatureId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   const fetchMe = useCallback(async (tok: string) => {
@@ -38,7 +39,12 @@ export default function App() {
     setToken(result.token);
     fetchMe(result.token);
     setBuilderOpen(false);
-    setFocus({ id: result.creatureId, lineageId: result.lineageId, nonce: Date.now() });
+    setSelectedCreatureId(result.creatureId);
+  }
+
+  function toggleDigest() {
+    if (!token || !me) return;
+    api.setPrefs(token, !me.dailyDigest).then(() => fetchMe(token));
   }
 
   function share() {
@@ -47,9 +53,7 @@ export default function App() {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       },
-      () => {
-        /* clipboard blocked; ignore */
-      },
+      () => {},
     );
   }
 
@@ -71,10 +75,9 @@ export default function App() {
             <span className="re">re</span>
             <span className="rest">TechnoSphere</span>
           </div>
-          <span className="sub">shared digital ecology</span>
+          <span className="sub">digital ecology</span>
         </div>
         <div className="gap">
-          <span className="hint">drag to pan · scroll to zoom · click a creature</span>
           <button className="btn small" onClick={share}>
             {copied ? "✓ Link copied" : "🔗 Share world"}
           </button>
@@ -82,16 +85,24 @@ export default function App() {
       </div>
 
       <div className="screen">
-        <WorldView
-          me={me}
-          token={token}
-          focus={focus}
-          onBuildAnother={() => setBuilderOpen(true)}
-          onPrefsChanged={() => token && fetchMe(token)}
-        />
+        {selectedCreatureId != null ? (
+          <CreatureDetail
+            id={selectedCreatureId}
+            onOpenCreature={setSelectedCreatureId}
+            onBack={() => setSelectedCreatureId(null)}
+          />
+        ) : (
+          <Roster
+            token={token}
+            me={me}
+            onOpenCreature={setSelectedCreatureId}
+            onBuild={() => setBuilderOpen(true)}
+            onToggleDigest={toggleDigest}
+          />
+        )}
 
         {builderOpen && (
-          <div style={{ position: "absolute", inset: 0, zIndex: 50, background: "rgba(4,7,12,0.9)" }}>
+          <div style={{ position: "absolute", inset: 0, zIndex: 50, background: "rgba(4,7,12,0.92)" }}>
             <Builder me={me} onReleased={onReleased} onCancel={() => setBuilderOpen(false)} canCancel={hasLineages} />
           </div>
         )}

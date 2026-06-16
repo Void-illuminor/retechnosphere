@@ -8,8 +8,45 @@
  */
 import type { Behaviour, Creature } from "./creature";
 import type { LifeEvent } from "./events";
-import type { Diet } from "./genome";
-import type { Lineage, Plant, PopSample, WorldStats } from "./world";
+import type { Diet, DerivedStats } from "./genome";
+import type { CreatureRecord, Lineage, Plant, PopSample, WorldStats } from "./world";
+
+/** Portrait + identity bits shared by summaries (enough to draw a creature). */
+export interface PortraitDTO {
+  diet: Diet;
+  hue: number;
+  accent: number;
+  sizeGene: number;
+  parts: { head: string; body: string; locomotion: string; eyes: string; mouth: string };
+}
+
+/** A creature as shown in the roster list (alive or dead). */
+export interface CreatureSummaryDTO extends PortraitDTO {
+  id: number;
+  name: string;
+  generation: number;
+  lineageId: number;
+  alive: boolean;
+  cause: string | null;
+  bornTime: number;
+  diedTime: number | null;
+  /** Current age if alive, else age at death (sim seconds). */
+  age: number;
+  /** 0..1 if alive, else null. */
+  energyFrac: number | null;
+  meals: number;
+  kills: number;
+  offspringCount: number;
+  /** True for a creature with no dossier record (a wild ancestor). */
+  wild?: boolean;
+}
+
+export interface CreatureDetailDTO {
+  creature: CreatureSummaryDTO;
+  stats: DerivedStats;
+  parents: CreatureSummaryDTO[];
+  offspring: CreatureSummaryDTO[];
+}
 
 export const SNAPSHOT_VERSION = 1;
 
@@ -34,6 +71,8 @@ export interface WorldSnapshot {
   events: LifeEvent[];
   lineages: Lineage[];
   popHistory: PopSample[];
+  /** Per-creature dossier records for player bloodlines. */
+  dossier: CreatureRecord[];
   /** Wall-clock ms when this snapshot was written (used to fast-forward). */
   savedAtMs: number;
 }

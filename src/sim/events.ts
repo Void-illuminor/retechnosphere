@@ -25,6 +25,8 @@ export interface LifeEvent {
   time: number;
   /** Name of the creature the event is about. */
   subject: string;
+  /** Id of the creature the event is about (for per-creature dossiers). */
+  creatureId: number;
   /** Display headline. */
   headline: string;
   /** Body copy, written in the chatty TechnoSphere update voice. */
@@ -51,12 +53,13 @@ export function makeEvent(
   kind: LifeEventKind,
   time: number,
   subject: string,
+  creatureId: number,
   lineageId: number,
   headline: string,
   body: string,
   notable = false,
 ): LifeEvent {
-  return { id: nextEventId++, kind, time, subject, headline, body, lineageId, notable };
+  return { id: nextEventId++, kind, time, subject, creatureId, headline, body, lineageId, notable };
 }
 
 export function formatSimTime(seconds: number): string {

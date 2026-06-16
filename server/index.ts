@@ -81,6 +81,41 @@ app.get("/api/me", (req, res) => {
   });
 });
 
+// The player's roster of creatures (their bloodlines), alive and dead.
+app.get("/api/creatures", (req, res) => {
+  const sub = subs.getByToken(String(req.query.token || ""));
+  if (!sub) return res.json({ creatures: [] });
+  const world = worldManager.getWorld();
+  const ids = new Set(
+    [...world.lineages.values()].filter((l) => l.ownerEmail === sub.email).map((l) => l.id),
+  );
+  res.json({ creatures: world.rosterFor(ids) });
+});
+
+// Recent life events across the player's bloodlines (the "field reports" feed).
+app.get("/api/feed", (req, res) => {
+  const sub = subs.getByToken(String(req.query.token || ""));
+  if (!sub) return res.json({ events: [] });
+  const world = worldManager.getWorld();
+  const ids = new Set(
+    [...world.lineages.values()].filter((l) => l.ownerEmail === sub.email).map((l) => l.id),
+  );
+  const events = worldManager
+    .eventsForLineagesSince(ids, 0)
+    .sort((a, b) => b.id - a.id)
+    .slice(0, 60);
+  res.json({ events });
+});
+
+// One creature's full dossier: stats, parents, offspring, and its life events.
+app.get("/api/creature/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "bad id" });
+  const detail = worldManager.getWorld().creatureDetailOf(id);
+  if (!detail) return res.status(404).json({ error: "not found" });
+  res.json({ ...detail, events: worldManager.eventsForCreature(id) });
+});
+
 app.post("/api/prefs", (req, res) => {
   const { token, dailyDigest } = req.body ?? {};
   const sub = subs.setDailyDigest(String(token || ""), !!dailyDigest);

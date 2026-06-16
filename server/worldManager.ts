@@ -19,6 +19,7 @@ export interface StoredEvent {
   headline: string;
   body: string;
   lineageId: number;
+  creatureId: number;
   notable: boolean;
 }
 
@@ -91,6 +92,7 @@ class WorldManager {
           headline: e.headline,
           body: e.body,
           lineageId: e.lineageId,
+          creatureId: e.creatureId,
           notable: e.notable,
         });
         if (e.id > maxId) maxId = e.id;
@@ -129,6 +131,10 @@ class WorldManager {
 
   eventsForLineagesSince(lineageIds: Set<number>, sinceMs: number): StoredEvent[] {
     return this.events.filter((e) => lineageIds.has(e.lineageId) && e.wallMs >= sinceMs);
+  }
+
+  eventsForCreature(creatureId: number, limit = 200): StoredEvent[] {
+    return this.events.filter((e) => e.creatureId === creatureId).slice(-limit).reverse();
   }
 
   release(input: { genome: Genome; name: string; displayName: string; email: string }): {

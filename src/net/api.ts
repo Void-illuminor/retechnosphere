@@ -1,10 +1,7 @@
 /** Browser-side client for the reTechnoSphere server API. */
 import type { Genome } from "../sim/genome";
-import type { ClientState } from "../sim/wire";
+import type { ClientState, CreatureDetailDTO, CreatureSummaryDTO } from "../sim/wire";
 
-// When the client is served by a different host than the API (e.g. a static
-// frontend on Render talking to a backend on Railway), set VITE_API_BASE at
-// build time to the backend's URL. Empty = same-origin (combined deployment).
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
 
 export interface StoredEventDTO {
@@ -15,6 +12,7 @@ export interface StoredEventDTO {
   headline: string;
   body: string;
   lineageId: number;
+  creatureId: number;
   notable: boolean;
 }
 
@@ -47,6 +45,8 @@ export interface ReleasePayload extends Genome {
   email: string;
 }
 
+export type CreatureDetail = CreatureDetailDTO & { events: StoredEventDTO[] };
+
 async function jget<T>(url: string): Promise<T> {
   const res = await fetch(API_BASE + url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -64,17 +64,22 @@ async function jpost<T>(url: string, body: unknown): Promise<T> {
   return data as T;
 }
 
+const enc = encodeURIComponent;
+
 export const api = {
   state: () => jget<ClientState>("/api/state"),
-  events: (lineage: number, since = 0) =>
-    jget<{ events: StoredEventDTO[] }>(`/api/events?lineage=${lineage}&since=${since}`),
+  me: (token: string) => jget<MeInfo>(`/api/me?token=${enc(token)}`),
+  creatures: (token: string) => jget<{ creatures: CreatureSummaryDTO[] }>(`/api/creatures?token=${enc(token)}`),
+  creature: (id: number) => jget<CreatureDetail>(`/api/creature/${id}`),
+  feed: (token: string) => jget<{ events: StoredEventDTO[] }>(`/api/feed?token=${enc(token)}`),
   release: (payload: ReleasePayload) => jpost<ReleaseResult>("/api/release", payload),
-  me: (token: string) => jget<MeInfo>(`/api/me?token=${encodeURIComponent(token)}`),
   setPrefs: (token: string, dailyDigest: boolean) =>
     jpost<{ ok: boolean; dailyDigest: boolean }>("/api/prefs", { token, dailyDigest }),
 };
 
-// --- small localStorage helpers for the visitor's identity token ----------
+export type { CreatureSummaryDTO, CreatureDetailDTO };
+
+// --- visitor identity token (localStorage) --------------------------------
 const TOKEN_KEY = "rts_token";
 export const tokenStore = {
   get: () => {

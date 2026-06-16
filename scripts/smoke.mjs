@@ -1,6 +1,6 @@
-// End-to-end smoke test for the shared-world build. Drives the real app against
-// a running server: enter -> build a creature with an email -> release -> see it
-// live -> read the field report -> toggle daily email. Fails on console errors.
+// End-to-end smoke test for the roster/dossier (original-style) UI.
+// enter -> build with email -> release -> land on the creature's dossier ->
+// verify life story -> back to roster -> see the creature card. Fails on errors.
 import puppeteer from "puppeteer";
 
 const URL = process.env.SMOKE_URL || "http://localhost:8899/";
@@ -21,7 +21,7 @@ async function clickByText(page, selector, text) {
 const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
 try {
   const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 820 });
+  await page.setViewport({ width: 1280, height: 860 });
   page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("response", (r) => {
@@ -39,49 +39,44 @@ try {
   await inputs[0].type("Smokey");
   await inputs[1].type("Tester");
   await inputs[2].type("tester@example.com");
-  await sleep(300);
-  await page.screenshot({ path: "/tmp/shot-builder2.png" });
+  await sleep(200);
+  await page.screenshot({ path: "/tmp/shot-builder3.png" });
   await clickByText(page, "button.primary", "Release");
 
-  // World should appear (builder overlay gone).
-  await page.waitForFunction(() => !document.querySelector(".builder"), { timeout: 8000 });
-  await page.waitForSelector("canvas.field");
-  await page.waitForSelector(".hud");
-  await sleep(4000); // let the world stream + inbox poll
+  // Should land on the dossier for the new creature.
+  await page.waitForSelector(".detail-name", { timeout: 8000 });
+  await sleep(1500);
+  const detailName = await page.$eval(".detail-name", (el) => el.textContent || "");
+  const heroCanvasOk = await page.$eval(".detail-hero canvas", (c) => c.width > 50 && c.height > 50);
+  const storyText = await page.$eval(".detail-story", (el) => el.textContent || "");
+  await page.screenshot({ path: "/tmp/shot-dossier.png" });
 
-  const state = await page.evaluate(async () => {
-    const r = await fetch("/api/state");
-    return r.json();
-  });
-  const token = await page.evaluate(() => localStorage.getItem("rts_token"));
-  const me = await page.evaluate(async (t) => (await fetch("/api/me?token=" + t)).json(), token);
+  // Back to roster
+  await clickByText(page, ".btn", "Back");
+  await page.waitForSelector(".roster", { timeout: 5000 });
+  await sleep(800);
+  const cardText = await page.$$eval(".creature-card", (els) => els.map((e) => e.textContent || "").join(" | "));
+  const feedCount = await page.$$eval(".roster-feed .mail-btn", (els) => els.length);
+  const rosterCanvases = await page.$$eval(".creature-card canvas", (els) => els.length);
+  await page.screenshot({ path: "/tmp/shot-roster.png" });
 
-  const hudText = await page.$eval(".hud", (el) => el.textContent || "");
-  const inboxText = await page.$eval(".inbox", (el) => el.textContent || "");
-  const canvasOk = await page.$eval("canvas.field", (c) => c.width > 100 && c.height > 100);
+  // Toggle digest
+  await clickByText(page, ".roster-head .btn", "on");
 
-  await page.screenshot({ path: "/tmp/shot-world2.png" });
-
-  // Toggle daily email off then verify.
-  const before = me.dailyDigest;
-  await clickByText(page, ".inbox .btn", before ? "On" : "Off");
-  await sleep(600);
-  const me2 = await page.evaluate(async (t) => (await fetch("/api/me?token=" + t)).json(), token);
-
-  console.log("creatures in shared state:", state.creatures.length);
-  console.log("my lineages:", me.lineages.map((l) => l.founderName).join(",") || "(none)");
-  console.log("inbox mentions Smokey:", inboxText.includes("Smokey"));
-  console.log("HUD has Grazers:", hudText.includes("Grazers"));
-  console.log("daily digest toggled:", before, "->", me2.dailyDigest);
-  console.log("canvas ok:", canvasOk);
+  console.log("dossier name:", JSON.stringify(detailName));
+  console.log("hero portrait ok:", heroCanvasOk);
+  console.log("story mentions Smokey:", storyText.includes("Smokey"));
+  console.log("roster card has Smokey:", cardText.includes("Smokey"));
+  console.log("roster portrait canvases:", rosterCanvases);
+  console.log("feed entries:", feedCount);
 
   const ok =
-    state.creatures.length > 10 &&
-    me.lineages.some((l) => l.founderName === "Smokey") &&
-    inboxText.includes("Smokey") &&
-    hudText.includes("Grazers") &&
-    me2.dailyDigest !== before &&
-    canvasOk &&
+    detailName.includes("Smokey") &&
+    heroCanvasOk &&
+    storyText.includes("Smokey") &&
+    cardText.includes("Smokey") &&
+    rosterCanvases >= 1 &&
+    feedCount >= 1 &&
     errors.length === 0;
 
   if (errors.length) {

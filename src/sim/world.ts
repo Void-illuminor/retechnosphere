@@ -28,7 +28,14 @@ import { Rng } from "./rng";
 import { Terrain } from "./terrain";
 import { TAU, angleDiff, clamp, dist } from "./vec";
 import { SNAPSHOT_VERSION } from "./wire";
-import type { ClientCreature, ClientLineage, ClientState, WorldSnapshot } from "./wire";
+import type {
+  ClientCreature,
+  ClientLineage,
+  ClientState,
+  CreatureDetailDTO,
+  CreatureSummaryDTO,
+  WorldSnapshot,
+} from "./wire";
 
 export interface Plant {
   x: number;
@@ -67,6 +74,41 @@ export interface PopSample {
   carn: number;
 }
 
+/** A snapshot of a parent at the moment of breeding (for the family tree). */
+export interface ParentSnap {
+  id: number;
+  name: string;
+  diet: Diet;
+  hue: number;
+  accent: number;
+  sizeGene: number;
+  parts: Record<string, string>;
+  generation: number;
+}
+
+/**
+ * A durable per-creature record for the player's bloodlines — the "dossier".
+ * Unlike live creatures (which vanish from the world on death), records persist
+ * so you can browse a creature's whole life story, its parents and its offspring.
+ */
+export interface CreatureRecord {
+  id: number;
+  name: string;
+  lineageId: number;
+  diet: Diet;
+  generation: number;
+  genome: Genome;
+  parents: ParentSnap[];
+  offspringIds: number[];
+  bornTime: number;
+  diedTime: number | null;
+  cause: string | null;
+  /** Tallies; for living creatures the live values override these when served. */
+  meals: number;
+  kills: number;
+  alive: boolean;
+}
+
 const EVENT_CAP = 600;
 const POP_HISTORY_CAP = 160;
 
@@ -78,6 +120,8 @@ export class World {
   events: LifeEvent[] = [];
   lineages = new Map<number, Lineage>();
   popHistory: PopSample[] = [];
+  /** Durable per-creature dossier for player bloodlines (persists past death). */
+  dossier = new Map<number, CreatureRecord>();
 
   readonly seed: number;
   time = 0;
@@ -189,6 +233,7 @@ export class World {
       ownerEmail: owner?.email,
       ownerName: owner?.displayName,
     });
+    this.recordBirth(c, []);
     const who = owner?.displayName ? `${owner.displayName} released` : "You released";
     this.pushEvent(
       "released",
@@ -524,6 +569,7 @@ export class World {
         line.bestGeneration = Math.max(line.bestGeneration, generation);
         line.extinct = false;
       }
+      this.recordBirth(child, [this.parentSnap(a), this.parentSnap(b)]);
       // Report the mating from the lineage parent's perspective.
       const parent = a.lineageId >= 0 ? a : b;
       this.pushEvent(
@@ -566,6 +612,7 @@ export class World {
         line.bestGeneration = Math.max(line.bestGeneration, generation);
         line.extinct = false;
       }
+      this.recordBirth(child, [this.parentSnap(c)]);
       this.pushEvent(
         "offspring",
         c,
@@ -589,6 +636,14 @@ export class World {
         line.alive = Math.max(0, line.alive - 1);
         line.deaths++;
         if (line.alive === 0) line.extinct = true;
+      }
+      const rec = this.dossier.get(c.id);
+      if (rec) {
+        rec.alive = false;
+        rec.cause = cause;
+        rec.diedTime = this.time;
+        rec.meals = c.meals;
+        rec.kills = c.kills;
       }
       const lived = Math.round(c.age);
       const msg =
@@ -659,7 +714,7 @@ export class World {
     notable = false,
   ): void {
     if (c.lineageId < 0) return;
-    this.events.push(makeEvent(kind, this.time, c.name, c.lineageId, headline, body, notable));
+    this.events.push(makeEvent(kind, this.time, c.name, c.id, c.lineageId, headline, body, notable));
     if (this.events.length > EVENT_CAP) this.events.shift();
   }
 
@@ -686,6 +741,130 @@ export class World {
   /** Living creatures belonging to a player bloodline, newest first. */
   lineageMembers(lineageId: number): Creature[] {
     return this.creatures.filter((c) => c.lineageId === lineageId);
+  }
+
+  // ----------------------------------------------------------- dossier
+
+  private parentSnap(c: Creature): ParentSnap {
+    return {
+      id: c.id,
+      name: c.name,
+      diet: c.genome.diet,
+      hue: c.genome.hue,
+      accent: c.genome.accent,
+      sizeGene: c.genome.sizeGene,
+      parts: { ...c.genome.parts },
+      generation: c.generation,
+    };
+  }
+
+  private recordBirth(c: Creature, parents: ParentSnap[]): void {
+    if (c.lineageId < 0) return;
+    this.dossier.set(c.id, {
+      id: c.id,
+      name: c.name,
+      lineageId: c.lineageId,
+      diet: c.genome.diet,
+      generation: c.generation,
+      genome: c.genome,
+      parents,
+      offspringIds: [],
+      bornTime: this.time,
+      diedTime: null,
+      cause: null,
+      meals: 0,
+      kills: 0,
+      alive: true,
+    });
+    for (const p of parents) {
+      const pr = this.dossier.get(p.id);
+      if (pr && !pr.offspringIds.includes(c.id)) pr.offspringIds.push(c.id);
+    }
+  }
+
+  private liveById(id: number): Creature | undefined {
+    for (const c of this.creatures) if (c.id === id) return c;
+    return undefined;
+  }
+
+  private summaryFromRecord(rec: CreatureRecord): CreatureSummaryDTO {
+    const live = rec.alive ? this.liveById(rec.id) : undefined;
+    const age = live ? live.age : (rec.diedTime ?? this.time) - rec.bornTime;
+    return {
+      id: rec.id,
+      name: rec.name,
+      diet: rec.diet,
+      generation: rec.generation,
+      lineageId: rec.lineageId,
+      alive: rec.alive && !!live,
+      cause: rec.cause,
+      bornTime: Math.round(rec.bornTime),
+      diedTime: rec.diedTime === null ? null : Math.round(rec.diedTime),
+      age: Math.max(0, Math.round(age)),
+      energyFrac: live ? Math.max(0, Math.min(1, live.energy / live.stats.maxEnergy)) : null,
+      meals: live ? live.meals : rec.meals,
+      kills: live ? live.kills : rec.kills,
+      offspringCount: rec.offspringIds.length,
+      hue: Math.round(rec.genome.hue),
+      accent: rec.genome.accent,
+      sizeGene: rec.genome.sizeGene,
+      parts: rec.genome.parts,
+      wild: false,
+    };
+  }
+
+  private summaryFromParent(p: ParentSnap): CreatureSummaryDTO {
+    return {
+      id: p.id,
+      name: p.name,
+      diet: p.diet,
+      generation: p.generation,
+      lineageId: -1,
+      alive: false,
+      cause: null,
+      bornTime: 0,
+      diedTime: null,
+      age: 0,
+      energyFrac: null,
+      meals: 0,
+      kills: 0,
+      offspringCount: 0,
+      hue: Math.round(p.hue),
+      accent: p.accent,
+      sizeGene: p.sizeGene,
+      parts: p.parts as CreatureSummaryDTO["parts"],
+      wild: true,
+    };
+  }
+
+  /** Roster of all dossier creatures across the given bloodlines. */
+  rosterFor(lineageIds: Set<number>): CreatureSummaryDTO[] {
+    const out: CreatureSummaryDTO[] = [];
+    for (const rec of this.dossier.values()) {
+      if (lineageIds.has(rec.lineageId)) out.push(this.summaryFromRecord(rec));
+    }
+    out.sort((a, b) => Number(b.alive) - Number(a.alive) || b.bornTime - a.bornTime);
+    return out;
+  }
+
+  /** Full dossier for one creature: its story basis, parents and offspring. */
+  creatureDetailOf(id: number): CreatureDetailDTO | null {
+    const rec = this.dossier.get(id);
+    if (!rec) return null;
+    const parents = rec.parents.map((p) => {
+      const pr = this.dossier.get(p.id);
+      return pr ? this.summaryFromRecord(pr) : this.summaryFromParent(p);
+    });
+    const offspring = rec.offspringIds
+      .map((cid) => this.dossier.get(cid))
+      .filter((r): r is CreatureRecord => !!r)
+      .map((r) => this.summaryFromRecord(r));
+    return {
+      creature: this.summaryFromRecord(rec),
+      stats: deriveStats(rec.genome),
+      parents,
+      offspring,
+    };
   }
 
   // ------------------------------------------------------- serialization
@@ -761,6 +940,7 @@ export class World {
       events: this.events.map((e) => ({ ...e })),
       lineages: [...this.lineages.values()].map((l) => ({ ...l })),
       popHistory: this.popHistory.map((s) => ({ ...s })),
+      dossier: [...this.dossier.values()].map((r) => ({ ...r })),
       savedAtMs: Date.now(),
     };
   }
@@ -782,8 +962,38 @@ export class World {
     this.events = snap.events.map((e) => ({ ...e }));
     this.lineages = new Map(snap.lineages.map((l) => [l.id, { ...l }]));
     this.popHistory = snap.popHistory.map((s) => ({ ...s }));
+    this.dossier = new Map((snap.dossier ?? []).map((r) => [r.id, { ...r }]));
     this.accumulator = 0;
     this.newborns = [];
+    this.backfillDossier();
+  }
+
+  /**
+   * Worlds saved before the dossier existed (or wild creatures adopted into a
+   * lineage) may have living player-bloodline creatures with no record. Create
+   * minimal records for them so they appear in the roster going forward.
+   */
+  private backfillDossier(): void {
+    for (const c of this.creatures) {
+      if (c.lineageId >= 0 && !this.dossier.has(c.id)) {
+        this.dossier.set(c.id, {
+          id: c.id,
+          name: c.name,
+          lineageId: c.lineageId,
+          diet: c.genome.diet,
+          generation: c.generation,
+          genome: c.genome,
+          parents: [],
+          offspringIds: [],
+          bornTime: Math.max(0, this.time - c.age),
+          diedTime: null,
+          cause: null,
+          meals: c.meals,
+          kills: c.kills,
+          alive: true,
+        });
+      }
+    }
   }
 
   static fromSnapshot(snap: WorldSnapshot): World {

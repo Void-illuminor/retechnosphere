@@ -1,7 +1,7 @@
-/** A live, gently-animated preview of the genome currently being designed. */
+/** A live, gently-bobbing portrait of the genome being designed in the builder. */
 import { useEffect, useRef } from "react";
 import { Genome } from "../sim/genome";
-import { drawCreature } from "../render/drawCreature";
+import { drawCreaturePortrait } from "../render/drawCreature";
 
 interface Props {
   genome: Genome;
@@ -9,7 +9,6 @@ interface Props {
 
 export default function CreaturePreview({ genome }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Keep the latest genome in a ref so the animation loop always draws current.
   const genomeRef = useRef(genome);
   genomeRef.current = genome;
 
@@ -33,24 +32,15 @@ export default function CreaturePreview({ genome }: Props) {
     const loop = (now: number) => {
       const t = (now - start) / 1000;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const w = canvas.width / dpr;
+      const h = canvas.height / dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
+      const size = Math.min(w, h) * 0.42;
       const cx = w / 2;
-      const cy = h / 2 + Math.sin(t * 1.4) * 6 * dpr; // gentle bob
-      const size = Math.min(w, h) * 0.22;
-
-      // Pedestal shadow.
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
-      ctx.beginPath();
-      ctx.ellipse(cx, h / 2 + size * 1.4, size * 1.1, size * 0.3, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Face "up" the screen, with a slow sway so the build feels alive.
-      const angle = -Math.PI / 2 + Math.sin(t * 0.8) * 0.18;
-      drawCreature(ctx, genomeRef.current, cx, cy, { size, angle, detail: true });
+      const cy = h / 2 + Math.sin(t * 1.4) * 5;
+      drawCreaturePortrait(ctx, genomeRef.current, cx, cy, { size });
 
       raf = requestAnimationFrame(loop);
     };

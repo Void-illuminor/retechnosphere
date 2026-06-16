@@ -1,103 +1,147 @@
 /**
- * Procedurally draws a creature from its genome onto a 2D canvas. The same
- * routine is used for the builder preview (large, facing up) and for every
- * creature in the world (small, facing its heading), so what you design is
- * exactly what you see roaming the savanna.
+ * Draws a creature as a shaded, side-on "portrait" — closer to the original
+ * TechnoSphere look: a glossy 3D-ish body assembled from mechanical parts (the
+ * signature wheels, plus legs/tracks/hover), a head with eyes and a mouth, on a
+ * little shadowed ground. Used for the builder preview, the roster thumbnails and
+ * the creature dossier hero. The creature faces left.
  *
- * Drawn centred on (x, y); angle 0 faces +x (to the right).
+ * Drawn centred on (cx, cy); `size` is the body radius in pixels.
  */
 import { Genome } from "../sim/genome";
 
-export interface DrawOpts {
-  size: number; // body radius in px
-  angle?: number; // facing direction in radians
-  detail?: boolean; // draw fine features (eyes, sensors); off for tiny world sprites
-  alpha?: number;
+interface PortraitOpts {
+  size: number;
+  ground?: boolean; // draw the shadow/ground (default true)
 }
 
 function hsl(h: number, s: number, l: number): string {
   return `hsl(${((h % 360) + 360) % 360}, ${s}%, ${l}%)`;
 }
 
-export function drawCreature(
+export function drawCreaturePortrait(
   ctx: CanvasRenderingContext2D,
   genome: Genome,
-  x: number,
-  y: number,
-  opts: DrawOpts,
+  cx: number,
+  cy: number,
+  opts: PortraitOpts,
 ): void {
-  const { size } = opts;
-  const angle = opts.angle ?? 0;
-  const detail = opts.detail ?? size > 11;
+  const s = opts.size;
   const carn = genome.diet === "carnivore";
-
-  const body = hsl(genome.hue, carn ? 58 : 52, 54);
-  const shade = hsl(genome.hue, carn ? 52 : 46, 36);
-  const accent = hsl(genome.hue + 30 + genome.accent * 50, 70, 64);
-  const metal = "#3a3f4b";
+  const hue = genome.hue;
+  const sat = carn ? 62 : 46;
+  const accent = hsl(hue + 35 + genome.accent * 40, 72, 62);
+  const metal = "#39414f";
+  const metalDark = "#222831";
+  const line = hsl(hue, sat - 12, 22);
 
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  if (opts.alpha !== undefined) ctx.globalAlpha = opts.alpha;
-  ctx.lineWidth = Math.max(1, size * 0.09);
+  ctx.translate(cx, cy);
   ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  const lw = Math.max(1, s * 0.06);
 
-  drawLocomotion(ctx, genome.parts.locomotion, size, metal, accent);
-  drawBody(ctx, genome.parts.body, size, body, shade);
-  drawHead(ctx, genome.parts.head, size, body, shade, detail);
-  if (detail) {
-    drawEyes(ctx, genome.parts.eyes, size, carn);
-    drawMouth(ctx, genome.parts.mouth, size, shade);
+  // --- ground shadow ---
+  if (opts.ground !== false) {
+    ctx.fillStyle = "rgba(0,0,0,0.30)";
+    ctx.beginPath();
+    ctx.ellipse(0, s * 1.18, s * 1.35, s * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
+
+  drawLocomotion(ctx, genome.parts.locomotion, s, metal, metalDark, accent, lw);
+  drawBody(ctx, genome.parts.body, s, hue, sat, line, lw);
+  drawHead(ctx, genome, s, hue, sat, line, accent, metal, lw, carn);
 
   ctx.restore();
 }
 
-// --- body / chassis ---------------------------------------------------------
+// --- body --------------------------------------------------------------------
+
+function bodyPath(ctx: CanvasRenderingContext2D, part: string, s: number): { w: number; h: number } {
+  ctx.beginPath();
+  switch (part) {
+    case "body_tank": {
+      const w = s * 1.25, h = s * 0.95;
+      roundRect(ctx, -w, -h, w * 2, h * 2, s * 0.35);
+      return { w, h };
+    }
+    case "body_sleek": {
+      ctx.ellipse(0, 0, s * 1.35, s * 0.62, 0, 0, Math.PI * 2);
+      return { w: s * 1.35, h: s * 0.62 };
+    }
+    case "body_pod": {
+      ctx.arc(0, 0, s, 0, Math.PI * 2);
+      return { w: s, h: s };
+    }
+    case "body_balanced":
+    default: {
+      const w = s * 1.12, h = s * 0.92;
+      roundRect(ctx, -w, -h, w * 2, h * 2, s * 0.6);
+      return { w, h };
+    }
+  }
+}
 
 function drawBody(
   ctx: CanvasRenderingContext2D,
   part: string,
   s: number,
-  fill: string,
-  stroke: string,
+  hue: number,
+  sat: number,
+  line: string,
+  lw: number,
 ): void {
-  ctx.fillStyle = fill;
-  ctx.strokeStyle = stroke;
-  ctx.beginPath();
-  switch (part) {
-    case "body_tank": // boxy, broad
-      roundRect(ctx, -s * 1.0, -s * 0.85, s * 2.0, s * 1.7, s * 0.3);
-      break;
-    case "body_sleek": // long, narrow
-      ctx.ellipse(0, 0, s * 1.25, s * 0.62, 0, 0, Math.PI * 2);
-      break;
-    case "body_pod": // round
-      ctx.arc(0, 0, s * 0.92, 0, Math.PI * 2);
-      break;
-    case "body_balanced": // hexagon
-    default:
-      polygon(ctx, 6, s, Math.PI / 6);
-      break;
-  }
+  const dims = bodyPath(ctx, part, s); // sets current path
+  const g = ctx.createRadialGradient(-s * 0.4, -s * 0.5, s * 0.1, 0, 0, s * 1.5);
+  g.addColorStop(0, hsl(hue, sat, 74));
+  g.addColorStop(0.55, hsl(hue, sat, 54));
+  g.addColorStop(1, hsl(hue, sat - 6, 34));
+  ctx.fillStyle = g;
   ctx.fill();
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = line;
   ctx.stroke();
 
-  // A little top highlight strip for a hint of dimensionality.
-  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  // glossy highlight
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
   ctx.beginPath();
-  ctx.ellipse(-s * 0.1, -s * 0.32, s * 0.5, s * 0.2, 0, 0, Math.PI * 2);
+  ctx.ellipse(-s * 0.35, -s * 0.45, dims.w * 0.42, dims.h * 0.26, -0.5, 0, Math.PI * 2);
   ctx.fill();
+
+  // a couple of riveted panel dots for mechanical flavour
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  for (const [dx, dy] of [[0.45, 0.1], [0.15, 0.5], [0.6, -0.35]]) {
+    ctx.beginPath();
+    ctx.arc(dx * s, dy * s, s * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
-// --- locomotion -------------------------------------------------------------
+// --- locomotion (side view, beneath the body) --------------------------------
 
-function wheel(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+function wheel(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, metal: string, metalDark: string, accent: string): void {
+  ctx.fillStyle = metalDark; // tyre
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
+  ctx.fillStyle = metal; // rim
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.62, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = accent; // hub
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.24, 0, Math.PI * 2);
+  ctx.fill();
+  // spokes
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = Math.max(1, r * 0.08);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * r * 0.58, y + Math.sin(a) * r * 0.58);
+    ctx.stroke();
+  }
 }
 
 function drawLocomotion(
@@ -105,217 +149,221 @@ function drawLocomotion(
   part: string,
   s: number,
   metal: string,
+  metalDark: string,
   accent: string,
+  lw: number,
 ): void {
-  ctx.fillStyle = metal;
-  ctx.strokeStyle = "#10131a";
-  const wheelR = s * 0.5;
+  const baseY = s * 0.95;
   switch (part) {
-    case "loco_bigwheels": {
-      for (const sy of [-1, 1]) {
-        ctx.fillStyle = metal;
-        wheel(ctx, s * 0.15, sy * s * 0.95, wheelR * 1.15);
-        ctx.fillStyle = accent;
-        wheel(ctx, s * 0.15, sy * s * 0.95, wheelR * 0.45);
-      }
+    case "loco_bigwheels":
+      wheel(ctx, s * 0.55, baseY, s * 0.62, metal, metalDark, accent);
+      wheel(ctx, -s * 0.55, baseY, s * 0.62, metal, metalDark, accent);
       break;
-    }
-    case "loco_mono": {
-      ctx.fillStyle = metal;
-      wheel(ctx, 0, 0, s * 1.15);
-      ctx.fillStyle = accent;
-      wheel(ctx, 0, 0, s * 0.4);
+    case "loco_mono":
+      wheel(ctx, 0, baseY + s * 0.1, s * 0.95, metal, metalDark, accent);
       break;
-    }
     case "loco_tracks": {
-      for (const sy of [-1, 1]) {
-        ctx.fillStyle = metal;
+      ctx.fillStyle = metalDark;
+      ctx.beginPath();
+      roundRect(ctx, -s * 1.15, baseY - s * 0.32, s * 2.3, s * 0.62, s * 0.3);
+      ctx.fill();
+      ctx.strokeStyle = "#10141b";
+      ctx.lineWidth = lw;
+      ctx.stroke();
+      // tread marks
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      for (let i = -4; i <= 4; i++) {
         ctx.beginPath();
-        roundRect(ctx, -s * 1.05, sy * s * 0.62 - s * 0.28, s * 2.1, s * 0.56, s * 0.18);
-        ctx.fill();
+        ctx.moveTo(i * s * 0.25, baseY - s * 0.28);
+        ctx.lineTo(i * s * 0.25, baseY + s * 0.28);
         ctx.stroke();
       }
+      wheel(ctx, -s * 0.8, baseY, s * 0.3, metal, metalDark, accent);
+      wheel(ctx, s * 0.8, baseY, s * 0.3, metal, metalDark, accent);
       break;
     }
     case "loco_legs": {
       ctx.strokeStyle = metal;
-      ctx.lineWidth = Math.max(1.5, s * 0.13);
-      for (const sy of [-1, 1]) {
-        for (const lx of [-0.6, 0, 0.6]) {
-          line(ctx, lx * s, sy * s * 0.5, lx * s, sy * s * 1.15);
-          line(ctx, lx * s, sy * s * 1.0, lx * s - s * 0.25, sy * s * 1.35);
-        }
+      ctx.lineWidth = Math.max(2, s * 0.13);
+      for (const lx of [-0.7, -0.2, 0.35, 0.85]) {
+        const x = lx * s;
+        ctx.beginPath();
+        ctx.moveTo(x, s * 0.5);
+        ctx.lineTo(x + s * 0.18, baseY);
+        ctx.lineTo(x - s * 0.1, baseY + s * 0.3);
+        ctx.stroke();
       }
       break;
     }
     case "loco_hover": {
-      ctx.fillStyle = "rgba(120,200,255,0.35)";
+      const g = ctx.createLinearGradient(0, baseY - s * 0.2, 0, baseY + s * 0.5);
+      g.addColorStop(0, "rgba(150,210,255,0.55)");
+      g.addColorStop(1, "rgba(120,200,255,0)");
+      ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(0, 0, s * 1.25, s * 0.95, 0, 0, Math.PI * 2);
+      ctx.moveTo(-s * 1.1, baseY - s * 0.15);
+      ctx.lineTo(s * 1.1, baseY - s * 0.15);
+      ctx.lineTo(s * 0.7, baseY + s * 0.5);
+      ctx.lineTo(-s * 0.7, baseY + s * 0.5);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "rgba(180,230,255,0.5)";
+      ctx.fillStyle = "rgba(180,230,255,0.6)";
       ctx.beginPath();
-      ctx.ellipse(0, s * 0.5, s * 0.9, s * 0.35, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, baseY - s * 0.12, s * 0.95, s * 0.2, 0, 0, Math.PI * 2);
       ctx.fill();
       break;
     }
   }
 }
 
-// --- head -------------------------------------------------------------------
+// --- head, eyes, mouth, sensors ---------------------------------------------
 
 function drawHead(
   ctx: CanvasRenderingContext2D,
-  part: string,
+  genome: Genome,
   s: number,
-  fill: string,
-  stroke: string,
-  detail: boolean,
+  hue: number,
+  sat: number,
+  line: string,
+  accent: string,
+  metal: string,
+  lw: number,
+  carn: boolean,
 ): void {
-  ctx.fillStyle = fill;
-  ctx.strokeStyle = stroke;
-  const hx = s * 0.95; // head sits forward
-  switch (part) {
-    case "head_blunt":
-      ctx.beginPath();
-      roundRect(ctx, hx - s * 0.1, -s * 0.5, s * 0.7, s * 1.0, s * 0.15);
-      ctx.fill();
-      ctx.stroke();
-      break;
-    case "head_compact":
-      ctx.beginPath();
-      ctx.moveTo(hx + s * 0.55, 0);
-      ctx.lineTo(hx - s * 0.1, -s * 0.4);
-      ctx.lineTo(hx - s * 0.1, s * 0.4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      break;
-    case "head_antenna":
-      ctx.beginPath();
-      ctx.arc(hx, 0, s * 0.42, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      if (detail) {
-        ctx.strokeStyle = stroke;
-        ctx.lineWidth = Math.max(1, s * 0.08);
-        line(ctx, hx, -s * 0.2, hx + s * 0.5, -s * 0.7);
-        line(ctx, hx, s * 0.2, hx + s * 0.5, s * 0.7);
-        dot(ctx, hx + s * 0.5, -s * 0.7, s * 0.1, stroke);
-        dot(ctx, hx + s * 0.5, s * 0.7, s * 0.1, stroke);
-      }
-      break;
-    case "head_sensor":
-    default:
-      ctx.beginPath();
-      ctx.arc(hx, 0, s * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      if (detail && part === "head_sensor") {
-        ctx.strokeStyle = stroke;
-        ctx.lineWidth = Math.max(1, s * 0.07);
-        for (const a of [-0.6, 0, 0.6]) {
-          line(ctx, hx, 0, hx + Math.cos(a) * s * 0.7, Math.sin(a) * s * 0.7);
-        }
-      }
-      break;
+  const hx = -s * 1.05; // head sits to the left (facing)
+  const hy = -s * 0.15;
+  const hr = s * 0.62;
+
+  // neck/connector
+  ctx.fillStyle = hsl(hue, sat - 6, 44);
+  ctx.beginPath();
+  roundRect(ctx, hx, hy - s * 0.35, s * 0.9, s * 0.7, s * 0.2);
+  ctx.fill();
+
+  // head ball (shaded)
+  const g = ctx.createRadialGradient(hx - hr * 0.4, hy - hr * 0.5, hr * 0.1, hx, hy, hr * 1.4);
+  g.addColorStop(0, hsl(hue, sat, 78));
+  g.addColorStop(0.6, hsl(hue, sat, 56));
+  g.addColorStop(1, hsl(hue, sat - 6, 36));
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  if (genome.parts.head === "head_blunt") {
+    roundRect(ctx, hx - hr, hy - hr * 0.95, hr * 2, hr * 1.9, hr * 0.3);
+  } else if (genome.parts.head === "head_compact") {
+    ctx.ellipse(hx, hy, hr * 0.85, hr * 0.8, 0, 0, Math.PI * 2);
+  } else {
+    ctx.arc(hx, hy, hr, 0, Math.PI * 2);
   }
-}
+  ctx.fill();
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = line;
+  ctx.stroke();
 
-// --- eyes -------------------------------------------------------------------
+  // sensors / antennae on top
+  ctx.strokeStyle = metal;
+  ctx.lineWidth = Math.max(1, s * 0.07);
+  if (genome.parts.head === "head_antenna") {
+    for (const a of [-0.5, 0.2]) {
+      ctx.beginPath();
+      ctx.moveTo(hx + a * hr, hy - hr * 0.8);
+      ctx.lineTo(hx + a * hr - s * 0.1, hy - hr * 1.7);
+      ctx.stroke();
+      dot(ctx, hx + a * hr - s * 0.1, hy - hr * 1.7, s * 0.1, accent);
+    }
+  } else if (genome.parts.head === "head_sensor") {
+    for (const a of [-0.55, 0, 0.55]) {
+      ctx.beginPath();
+      ctx.moveTo(hx + a * hr * 0.7, hy - hr * 0.7);
+      ctx.lineTo(hx + a * hr * 0.9, hy - hr * 1.35);
+      ctx.stroke();
+      dot(ctx, hx + a * hr * 0.9, hy - hr * 1.35, s * 0.07, accent);
+    }
+  }
 
-function drawEyes(ctx: CanvasRenderingContext2D, part: string, s: number, carn: boolean): void {
-  const eyeColor = carn ? "#ff5544" : "#1c2230";
-  const hx = s * 1.05;
-  switch (part) {
+  // eyes (toward the front-left)
+  const eyeColor = carn ? "#ff5a44" : "#1b2230";
+  const ex = hx - hr * 0.35;
+  const ey = hy - hr * 0.15;
+  switch (genome.parts.eyes) {
     case "eyes_telescopic":
-      dot(ctx, hx + s * 0.2, 0, s * 0.22, "#0b0e14");
-      dot(ctx, hx + s * 0.25, 0, s * 0.12, eyeColor);
+      ctx.strokeStyle = metal;
+      ctx.lineWidth = Math.max(1, s * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(hx, hy - hr * 0.2);
+      ctx.lineTo(ex - s * 0.15, ey - hr * 0.5);
+      ctx.stroke();
+      dot(ctx, ex - s * 0.15, ey - hr * 0.5, hr * 0.26, "#0c1118");
+      dot(ctx, ex - s * 0.18, ey - hr * 0.55, hr * 0.12, eyeColor);
       break;
     case "eyes_compound":
-      for (const sy of [-0.45, -0.15, 0.15, 0.45]) {
-        dot(ctx, hx, sy * s, s * 0.1, eyeColor);
+      for (const [dx, dy] of [[0, -0.2], [-0.22, 0], [0.05, 0.18], [-0.28, 0.22]]) {
+        dot(ctx, ex + dx * hr, ey + dy * hr, hr * 0.13, eyeColor);
       }
       break;
     case "eyes_night":
-      dot(ctx, hx, -s * 0.28, s * 0.2, "#0b0e14");
-      dot(ctx, hx, s * 0.28, s * 0.2, "#0b0e14");
-      dot(ctx, hx + s * 0.04, -s * 0.28, s * 0.1, eyeColor);
-      dot(ctx, hx + s * 0.04, s * 0.28, s * 0.1, eyeColor);
+      dot(ctx, ex, ey, hr * 0.34, "#0c1118");
+      dot(ctx, ex - hr * 0.05, ey - hr * 0.05, hr * 0.18, eyeColor);
+      dot(ctx, ex - hr * 0.1, ey - hr * 0.1, hr * 0.06, "#fff");
       break;
     case "eyes_basic":
     default:
-      dot(ctx, hx, -s * 0.25, s * 0.13, eyeColor);
-      dot(ctx, hx, s * 0.25, s * 0.13, eyeColor);
+      dot(ctx, ex, ey - hr * 0.12, hr * 0.2, "#f3f6fb");
+      dot(ctx, ex - hr * 0.04, ey - hr * 0.12, hr * 0.1, eyeColor);
+      dot(ctx, ex + hr * 0.18, ey + hr * 0.18, hr * 0.16, "#f3f6fb");
+      dot(ctx, ex + hr * 0.14, ey + hr * 0.18, hr * 0.08, eyeColor);
       break;
   }
-}
 
-// --- mouth ------------------------------------------------------------------
-
-function drawMouth(ctx: CanvasRenderingContext2D, part: string, s: number, stroke: string): void {
-  const mx = s * 1.4;
-  ctx.strokeStyle = stroke;
-  ctx.fillStyle = "#e9eef5";
-  ctx.lineWidth = Math.max(1, s * 0.08);
-  switch (part) {
+  // mouth at the very front (left edge of head)
+  const mx = hx - hr * 0.92;
+  const my = hy + hr * 0.42;
+  ctx.strokeStyle = line;
+  ctx.lineWidth = Math.max(1, s * 0.07);
+  switch (genome.parts.mouth) {
     case "mouth_shear":
     case "mouth_fangs": {
-      // a row of little teeth
+      ctx.fillStyle = "#eef2f7";
+      const n = genome.parts.mouth === "mouth_shear" ? 4 : 3;
       ctx.beginPath();
-      const n = part === "mouth_shear" ? 4 : 3;
       for (let i = 0; i < n; i++) {
-        const ty = -s * 0.3 + (i * s * 0.6) / (n - 1);
-        ctx.moveTo(mx - s * 0.15, ty - s * 0.07);
-        ctx.lineTo(mx + s * 0.18, ty);
-        ctx.lineTo(mx - s * 0.15, ty + s * 0.07);
+        const ty = my - hr * 0.25 + (i * hr * 0.5) / (n - 1);
+        ctx.moveTo(mx + hr * 0.16, ty - hr * 0.07);
+        ctx.lineTo(mx - hr * 0.12, ty);
+        ctx.lineTo(mx + hr * 0.16, ty + hr * 0.07);
       }
       ctx.fill();
       break;
     }
     case "mouth_beak":
+      ctx.fillStyle = "#d9bf6e";
       ctx.beginPath();
-      ctx.moveTo(mx + s * 0.2, 0);
-      ctx.lineTo(mx - s * 0.15, -s * 0.18);
-      ctx.lineTo(mx - s * 0.15, s * 0.18);
+      ctx.moveTo(mx - hr * 0.18, my);
+      ctx.lineTo(mx + hr * 0.2, my - hr * 0.2);
+      ctx.lineTo(mx + hr * 0.2, my + hr * 0.2);
       ctx.closePath();
-      ctx.fillStyle = "#d9c27a";
       ctx.fill();
       break;
     case "mouth_grazer":
     case "mouth_sieve":
     default:
-      line(ctx, mx - s * 0.2, -s * 0.22, mx - s * 0.2, s * 0.22);
+      ctx.beginPath();
+      ctx.moveTo(mx + hr * 0.18, my - hr * 0.28);
+      ctx.lineTo(mx - hr * 0.05, my);
+      ctx.lineTo(mx + hr * 0.18, my + hr * 0.28);
+      ctx.stroke();
       break;
   }
 }
 
-// --- primitives -------------------------------------------------------------
+// --- primitives --------------------------------------------------------------
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-}
-
-function polygon(ctx: CanvasRenderingContext2D, sides: number, r: number, rot: number): void {
-  for (let i = 0; i < sides; i++) {
-    const a = rot + (i / sides) * Math.PI * 2;
-    const px = Math.cos(a) * r;
-    const py = Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-}
-
-function line(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
 }
 
 function dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
