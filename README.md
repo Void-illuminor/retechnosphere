@@ -4,134 +4,167 @@ A recreation of **[TechnoSphere](https://en.wikipedia.org/wiki/TechnoSphere_(vir
 (1995–2002) — Jane Prophet & Dr. Gordon Selley's pioneering online "digital
 ecology", one of the web's first artificial-life worlds.
 
-In the original, users from around the globe designed creatures out of
-mechanical body parts — first choosing **herbivore (Grazer)** or **carnivore
-(Prowler)**, then picking a head, body, wheels/legs, eyes and mouth — and
-released them into a shared 3D fractal savanna. The creatures then lived
-entirely on their own: roaming, grazing or hunting, mating, breeding, evolving
-and dying. Famously there was no live view at first — you simply received
-**email updates** about your creature's size, offspring and fate.
-
-reTechnoSphere brings that loop back as a single-page web app: build a creature,
-release it into a living, evolving world you *can* now watch, and follow your
-bloodline through the **Field Reports** inbox.
+Design a creature out of mechanical body parts, release it into **one living
+world shared by everyone**, and follow your bloodline as it roams, grazes or
+hunts, mates, breeds, evolves and dies — entirely on its own. The world runs on
+a server and **keeps living whether you're watching or not**, and (just like the
+original) it **emails you** a daily field report of how your creatures are faring.
 
 ![the creature builder](docs/builder.png)
-![the live world](docs/world.png)
+![the live shared world](docs/world.png)
 
 ## Features
 
-- **Creature builder** — choose a diet, assemble five body parts (each a real
-  stat trade-off), tweak colour and size, and watch a live preview drawn from
-  the exact same code that renders the world.
-- **Living world** — a fractal-noise savanna of water, sand, grassland, scrub
-  and rock. Plants only grow on fertile ground, so herbivores congregate and
-  the terrain actually matters.
-- **Artificial-life simulation** — energy/metabolism, vision-based sensing,
-  foraging, predator/prey chases, fleeing, mating with genetic crossover +
-  mutation, budding, ageing and death. Predator–prey populations oscillate and
-  creatures **evolve across generations** with no scripting.
-- **Field Reports** — the soul of the original: an inbox of life-event "emails"
-  for every bloodline you found ("*Jorornyx made a kill*", "*…has bred —
-  generation 7*", "*…was hunted down and eaten*").
-- **Faithful retro skin** — beveled metallic panels, CRT scanlines, neon
-  accents and Tahoma/monospace type, in the spirit of late-90s/early-2000s
-  sci-fi software.
+- **One shared, persistent world.** A single Node server owns the simulation,
+  saves it to disk, and streams it to every browser. Share the URL and the whole
+  family explores the same ecology. Leave and come back — it kept going, and if
+  the server was ever down it **fast-forwards** to make up the lost time.
+- **Creature builder.** Pick a diet (Grazer/Prowler), assemble five body parts
+  (each a real stat trade-off), tune colour and size, and watch a live preview
+  drawn from the same code that renders the world.
+- **Real artificial life.** Energy/metabolism, vision-based sensing, foraging,
+  predator/prey chases, fleeing, mating with genetic crossover + mutation,
+  budding, ageing and death. Populations oscillate and creatures **evolve across
+  generations** with no scripting.
+- **Email field reports.** A daily digest (via [Resend](https://resend.com))
+  summarises what your bloodlines did — births, kills, losses, new generations —
+  with one-click unsubscribe. Toggle it on/off in-app.
+- **Smooth on the wire.** Browsers poll ~1×/second and dead-reckon motion at
+  60fps, so it looks alive without heavy bandwidth.
+- **Faithful retro skin** — beveled panels, CRT scanlines, neon accents.
 
-## Running it
+## Quick start (local)
 
 ```bash
 npm install
-npm run dev        # start the Vite dev server, then open the printed URL
+npm run dev      # runs the Vite client (5173) + the world server (8787)
+# open http://localhost:5173
 ```
 
-Other scripts:
+Without a Resend key, emails run in **dry-run** mode (logged to the console), so
+you can exercise the whole flow offline. To try real email locally, copy
+`.env.example` to `.env` and set `RESEND_API_KEY`.
+
+Production-style run (one server serving the built client + API):
 
 ```bash
-npm run build      # type-check + production build into dist/
-npm run preview    # serve the production build
-npm run typecheck  # strict TypeScript check (app + dev scripts)
-npm run sim:test   # headless simulation: run the engine for N sim-seconds and
-                   # print population/evolution stats (no browser needed)
+npm run build && npm start    # serves on http://localhost:8787
 ```
 
-`npm run sim:test [seed] [seconds]` is handy for tuning the ecological balance —
-it runs the pure simulation with no renderer and reports population, births,
-deaths and the maximum generation reached.
+Useful scripts:
 
-## How to play
-
-1. **Enter the Sphere** and design your first creature.
-2. Pick **Grazer** or **Prowler**, assemble its body, name it, and **Release**
-   it. The world is already seeded with wildlife and keeps running underneath
-   the builder.
-3. **Watch**: drag to pan, scroll to zoom, click any creature to inspect it,
-   and toggle **Follow** to track your own. Use the speed control to fast-forward
-   evolution.
-4. **Read your Field Reports** for word of how your bloodline is faring — and
-   release more creatures any time with **✚ New Creature**.
-
-Your creatures are genuinely on their own once released. They may thrive for
-many generations, or die out within minutes. Both are authentic TechnoSphere.
-
-## Architecture
-
-The simulation is deliberately separated from React and the renderer, so the
-engine is pure, testable TypeScript that runs in Node as easily as in the
-browser.
-
-```
-src/
-  sim/                 # the artificial-life engine (no DOM, no React)
-    rng.ts             # seeded PRNG (mulberry32) for reproducible worlds
-    vec.ts             # small vector / angle helpers
-    constants.ts       # all tunable ecology parameters in one place
-    parts.ts           # the body-part catalogue and their stat contributions
-    genome.ts          # genome -> derived stats; crossover, mutation, naming
-    terrain.ts         # fractal value-noise heightmap -> biomes & fertility
-    grid.ts            # uniform spatial hash for "what's near me" queries
-    creature.ts        # the creature entity (plain data) + factory
-    events.ts          # life-event ("email") types and formatting
-    world.ts           # the ecosystem: food, sensing, behaviour, breeding, death
-  render/              # canvas drawing (browser only)
-    drawCreature.ts    # procedurally draw a creature from its genome
-    renderWorld.ts     # terrain cache, plants, creatures, camera, selection
-  components/          # React UI
-    Intro, Builder, CreaturePreview, StatBars,
-    WorldView, Hud, Inbox, Inspector
-  styles/retro.css     # the early-2000s skin
-scripts/
-  simtest.ts           # headless engine smoke test (npm run sim:test)
-  smoke.mjs            # optional Puppeteer end-to-end test (see below)
+```bash
+npm run typecheck   # strict TS across client, server and scripts
+npm run sim:test    # headless engine + snapshot-determinism check (no browser)
 ```
 
-### Simulation notes
+## How it works
 
-- The world advances in **fixed time steps** for stability, decoupled from the
-  render frame rate; the UI runs one `requestAnimationFrame` loop that both
-  steps and draws the world while React only re-renders the overlay panels a few
-  times a second.
-- Each creature **senses** nearby food, prey, threats and mates through the
-  spatial hash, then **decides** a single behaviour per tick (flee > hunt >
-  court > forage > wander) and steers toward it, limited by its agility.
-- Reproduction is primarily **sexual** (crossover of two genomes + mutation).
-  A **budding** fallback lets a thriving loner divide when no mate is near, so
-  sparse predators can still grow their numbers and real predator/prey cycles
-  emerge. A light stream of wild "immigrants" keeps either population from
-  quietly going extinct — echoing the original's constant influx of
-  user-created creatures.
+```
+Browser (React)  ──poll /api/state──▶  Node server  ──▶  data/ (JSON on disk)
+  renders + dead-reckons               owns the World        world + subscribers
+  builder POSTs /api/release           runs the sim loop     + durable event log
+  reads /api/events (inbox)            sends digests ──▶ Resend
+```
+
+- The **simulation engine** (`src/sim/`) is pure, DOM-free TypeScript, so the
+  exact same code runs the authoritative world on the server and (only its
+  terrain + drawing helpers) in the browser. Terrain is regenerated from the
+  world **seed** on both sides, so it's never sent over the wire.
+- The server advances the world in real time, **snapshots to disk** every few
+  seconds, and on boot **restores + fast-forwards** by the elapsed downtime
+  (capped by `CATCHUP_CAP_SECONDS`). Save/restore is verified bit-for-bit by
+  `npm run sim:test`.
+- Identity is just an **email + display name** (no passwords — a trusted family
+  world). Releasing a creature creates/upserts a subscriber and returns a token
+  stored in your browser to view "your" bloodlines and manage email prefs.
+
+## Deploy a shareable URL
+
+### Render (recommended)
+
+1. Push this repo to GitHub.
+2. In Render: **New → Blueprint**, select the repo (it reads `render.yaml`),
+   and apply. This creates an always-on web service with a 1 GB persistent disk
+   mounted at `/data`.
+3. In the service's **Environment** tab set:
+   - `RESEND_API_KEY` — your Resend key
+   - `EMAIL_FROM` — e.g. `reTechnoSphere <noreply@yourdomain.com>`
+   - `PUBLIC_URL` — the service's URL (e.g. `https://retechnosphere.onrender.com`)
+4. Open the URL, build a creature, and **share that URL** with your family.
+
+`ADMIN_SECRET` and `CRON_SECRET` are generated automatically. A persistent disk
+requires a paid instance type; free services have no disk and idle when unused
+(the world still fast-forwards on the next visit, but won't run while idle).
+
+### Docker / Railway / any host
+
+```bash
+docker build -t retechnosphere .
+docker run -p 8787:8787 -v retechno-data:/data \
+  -e RESEND_API_KEY=re_xxx \
+  -e EMAIL_FROM="reTechnoSphere <noreply@yourdomain.com>" \
+  -e PUBLIC_URL=https://your.domain \
+  retechnosphere
+```
+
+On Railway, deploy from the repo and add a **Volume** mounted at `/data`, plus
+the same environment variables.
+
+## Email setup (Resend)
+
+1. Create an account at [resend.com](https://resend.com) and an API key.
+2. For real delivery, **verify a domain** and set `EMAIL_FROM` to an address on
+   it. (The default `onboarding@resend.dev` only delivers to your own Resend
+   account email — fine for a first test.)
+3. Set `RESEND_API_KEY` and `PUBLIC_URL`. Digests are sent by the server on a
+   schedule; you can also force a send for testing:
+   `curl -X POST "$PUBLIC_URL/api/admin/digest?key=$ADMIN_SECRET"`.
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RESEND_API_KEY` | — | Resend key; absent → dry-run (logged) email |
+| `EMAIL_FROM` | `onboarding@resend.dev` | Sender address |
+| `PUBLIC_URL` | — | Base URL for email links |
+| `DATA_DIR` | `./data` | Where world/subscribers/events are stored |
+| `PORT` | `8787` | Server port |
+| `SIM_SPEED` | `1` | World speed vs real time |
+| `WORLD_SEED` | random | Fixed seed for the shared world |
+| `CATCHUP_CAP_SECONDS` | `3600` | Max sim-time to fast-forward after downtime |
+| `DIGEST_INTERVAL_MS` | `86400000` | Min gap between a subscriber's digests |
+| `ADMIN_SECRET` / `CRON_SECRET` | — | Protect admin + external cron endpoints |
+
+## API (for reference)
+
+`GET /api/state` · `GET /api/events?lineage=&since=` · `POST /api/release` ·
+`GET /api/me?token=` · `POST /api/prefs` · `GET /unsubscribe?token=` ·
+`POST /api/cron?key=` · `POST /api/admin/{reset,digest}?key=`
+
+## Project structure
+
+```
+src/sim/        pure simulation engine (shared by server + client; serializable)
+src/render/     canvas drawing (creatures from genome, world renderer)
+src/net/        browser API client
+src/components/ React UI (Intro, Builder, WorldView, Hud, Inbox, Inspector)
+server/         Express server: world manager, storage, email, digests, API
+scripts/        simtest.ts (headless engine test), smoke.mjs (Puppeteer e2e)
+Dockerfile · render.yaml · .env.example   deployment
+```
 
 ## Optional end-to-end test
 
-`scripts/smoke.mjs` drives the built app in a headless browser (intro → build →
-release → run), checking for console/network errors and capturing screenshots.
-Puppeteer isn't a project dependency (it downloads Chromium), so install it
-ad-hoc:
+`scripts/smoke.mjs` drives the built app in a headless browser (enter → build →
+release → verify live world, inbox and email toggle). Puppeteer isn't a project
+dependency (it downloads Chromium), so install it ad-hoc:
 
 ```bash
 npm i -D puppeteer
-npm run build && npm run preview &   # serve on :4173
-node scripts/smoke.mjs
+npm run build
+DATA_DIR=/tmp/d PORT=8899 node --import tsx server/index.ts &   # serve
+SMOKE_URL=http://localhost:8899 node scripts/smoke.mjs
 ```
 
 ## Credit

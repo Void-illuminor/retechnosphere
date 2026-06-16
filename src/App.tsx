@@ -1,58 +1,67 @@
 /**
- * Top-level shell. Holds the single persistent World, shows the intro, then the
- * live world with the creature builder layered over it on demand. The world keeps
- * running underneath the builder, so every creature you release joins an ecology
- * that is already alive and evolving.
+ * Top-level shell for the shared world. Handles the intro, the visitor's
+ * identity token, the builder overlay, and focusing a newly released creature.
+ * The world itself lives on the server; this is just the window onto it.
  */
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Builder from "./components/Builder";
 import Intro from "./components/Intro";
 import WorldView, { FocusRequest } from "./components/WorldView";
-import { World } from "./sim/world";
+import { MeInfo, ReleaseResult, api, tokenStore } from "./net/api";
 
 export default function App() {
-  const worldRef = useRef<World | null>(null);
-  const [version, setVersion] = useState(0); // bump to remount the world view on reset
   const [started, setStarted] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
-  const nonce = useRef(0);
+  const [token, setToken] = useState<string | null>(() => tokenStore.get());
+  const [me, setMe] = useState<MeInfo | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  function ensureWorld(): World {
-    if (!worldRef.current) worldRef.current = new World();
-    return worldRef.current;
-  }
+  const fetchMe = useCallback(async (tok: string) => {
+    try {
+      setMe(await api.me(tok));
+    } catch {
+      setMe(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (token) fetchMe(token);
+  }, [token, fetchMe]);
 
   function enter() {
-    ensureWorld();
     setStarted(true);
-    setBuilderOpen(true); // design the first creature straight away
+    setBuilderOpen(!(me && me.lineages.length > 0));
   }
 
-  function onReleased(id: number) {
+  function onReleased(result: ReleaseResult) {
+    setToken(result.token);
+    fetchMe(result.token);
     setBuilderOpen(false);
-    nonce.current += 1;
-    setFocus({ id, nonce: nonce.current });
+    setFocus({ id: result.creatureId, lineageId: result.lineageId, nonce: Date.now() });
   }
 
-  function resetWorld() {
-    if (!window.confirm("Discard this world and seed a brand-new one?")) return;
-    worldRef.current = new World();
-    setFocus(null);
-    setBuilderOpen(false);
-    setVersion((v) => v + 1);
+  function share() {
+    navigator.clipboard?.writeText(window.location.href).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => {
+        /* clipboard blocked; ignore */
+      },
+    );
   }
 
   if (!started) {
     return (
       <div className="app">
-        <Intro onEnter={enter} />
+        <Intro onEnter={enter} returning={!!(me && me.lineages.length > 0)} />
       </div>
     );
   }
 
-  const world = ensureWorld();
-  const hasLineages = world.lineages.size > 0;
+  const hasLineages = !!(me && me.lineages.length > 0);
 
   return (
     <div className="app">
@@ -62,37 +71,28 @@ export default function App() {
             <span className="re">re</span>
             <span className="rest">TechnoSphere</span>
           </div>
-          <span className="sub">digital ecology</span>
+          <span className="sub">shared digital ecology</span>
         </div>
         <div className="gap">
-          <span className="hint">drag to pan · scroll to zoom · click a creature to inspect</span>
+          <span className="hint">drag to pan · scroll to zoom · click a creature</span>
+          <button className="btn small" onClick={share}>
+            {copied ? "✓ Link copied" : "🔗 Share world"}
+          </button>
         </div>
       </div>
 
       <div className="screen">
         <WorldView
-          key={version}
-          world={world}
+          me={me}
+          token={token}
           focus={focus}
           onBuildAnother={() => setBuilderOpen(true)}
-          onReset={resetWorld}
+          onPrefsChanged={() => token && fetchMe(token)}
         />
 
         {builderOpen && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 50,
-              background: "rgba(4,7,12,0.88)",
-            }}
-          >
-            <Builder
-              world={world}
-              onReleased={onReleased}
-              onCancel={() => setBuilderOpen(false)}
-              canCancel={hasLineages}
-            />
+          <div style={{ position: "absolute", inset: 0, zIndex: 50, background: "rgba(4,7,12,0.9)" }}>
+            <Builder me={me} onReleased={onReleased} onCancel={() => setBuilderOpen(false)} canCancel={hasLineages} />
           </div>
         )}
       </div>

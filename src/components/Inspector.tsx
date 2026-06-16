@@ -1,50 +1,43 @@
-/** Detail panel for the currently-selected creature. */
-import { Creature, energyFrac } from "../sim/creature";
+/** Detail panel for the currently-selected creature (streamed from the server). */
 import { formatSimTime } from "../sim/events";
 
+export interface InspectableCreature {
+  id: number;
+  name: string;
+  diet: "herbivore" | "carnivore";
+  gen: number;
+  founder: boolean;
+  ef: number;
+  beh: string;
+  age: number;
+  meals: number;
+  kills: number;
+  offspring: number;
+  lineageId: number;
+}
+
 interface Props {
-  creature: Creature | null;
-  selectedId: number | null;
+  creature: InspectableCreature | null;
   following: boolean;
+  isMine: boolean;
   onToggleFollow: () => void;
   onClose: () => void;
 }
 
-export default function Inspector({
-  creature,
-  selectedId,
-  following,
-  onToggleFollow,
-  onClose,
-}: Props) {
-  if (selectedId === null) return null;
-
-  if (!creature) {
-    return (
-      <div className="inspector panel">
-        <div className="spread">
-          <span className="cname">signal lost</span>
-          <button className="btn small ghost" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-        <div className="hint" style={{ marginTop: 6 }}>
-          This creature has died or left sensor range.
-        </div>
-      </div>
-    );
-  }
-
-  const carn = creature.genome.diet === "carnivore";
-  const frac = energyFrac(creature);
+export default function Inspector({ creature, following, isMine, onToggleFollow, onClose }: Props) {
+  if (!creature) return null;
+  const carn = creature.diet === "carnivore";
 
   return (
     <div className="inspector panel">
       <div className="spread">
         <div>
-          <div className="cname">{creature.name}</div>
+          <div className="cname">
+            {creature.name}
+            {isMine ? <span style={{ color: "var(--accent)" }}> ★</span> : null}
+          </div>
           <div className={`ctype ${carn ? "carn" : "herb"}`}>
-            {carn ? "Prowler" : "Grazer"} · gen {creature.generation}
+            {carn ? "Prowler" : "Grazer"} · gen {creature.gen}
             {creature.founder ? " · founder" : ""}
           </div>
         </div>
@@ -56,24 +49,24 @@ export default function Inspector({
       <div className="bar" style={{ marginTop: 8 }}>
         <span
           style={{
-            width: `${Math.round(frac * 100)}%`,
+            width: `${Math.round(Math.max(0, Math.min(1, creature.ef)) * 100)}%`,
             background:
-              frac > 0.5 ? "linear-gradient(90deg,#3fa35a,#7fd66a)" : frac > 0.25 ? "#e0c04a" : "#e0584a",
+              creature.ef > 0.5
+                ? "linear-gradient(90deg,#3fa35a,#7fd66a)"
+                : creature.ef > 0.25
+                  ? "#e0c04a"
+                  : "#e0584a",
           }}
         />
       </div>
 
       <div className="grid">
         <span className="k">Energy</span>
-        <span className="v">
-          {Math.round(creature.energy)}/{Math.round(creature.stats.maxEnergy)}
-        </span>
+        <span className="v">{Math.round(creature.ef * 100)}%</span>
         <span className="k">Age</span>
-        <span className="v">
-          {formatSimTime(creature.age)}/{formatSimTime(creature.stats.maxAge)}
-        </span>
+        <span className="v">{formatSimTime(creature.age)}</span>
         <span className="k">Doing</span>
-        <span className="v">{creature.behaviour}</span>
+        <span className="v">{creature.beh}</span>
         <span className="k">Meals</span>
         <span className="v">{creature.meals}</span>
         {carn ? (

@@ -1,0 +1,50 @@
+# Render Blueprint. In the Render dashboard: New > Blueprint, point it at this
+# repo, and apply. Then set RESEND_API_KEY and PUBLIC_URL (and EMAIL_FROM) in the
+# service's Environment tab. A persistent disk keeps the shared world alive across
+# deploys and restarts (requires a paid instance type; free services have no disk
+# and spin down when idle).
+services:
+  - type: web
+    name: retechnosphere
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: world-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22.11.0"
+      - key: DATA_DIR
+        value: /data
+      - key: SIM_SPEED
+        value: "1"
+      # The world will fast-forward up to this many sim-seconds after downtime.
+      - key: CATCHUP_CAP_SECONDS
+        value: "7200"
+      # --- email (Resend): set these in the dashboard ---
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "reTechnoSphere <onboarding@resend.dev>"
+      - key: PUBLIC_URL
+        sync: false
+      # --- secrets for admin + external cron (auto-generated) ---
+      - key: ADMIN_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+
+  # OPTIONAL: a scheduler that pokes the server so daily digests go out reliably
+  # even on instance types that idle. Safe to delete if your web service is
+  # always-on (the server also schedules digests itself).
+  # - type: cron
+  #   name: retechnosphere-digest
+  #   runtime: node
+  #   schedule: "0 * * * *"
+  #   buildCommand: npm ci
+  #   startCommand: 'curl -fsS -X POST "$PUBLIC_URL/api/cron?key=$CRON_SECRET"'

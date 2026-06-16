@@ -11,6 +11,16 @@ export class Rng {
     if (this.state === 0) this.state = 0x9e3779b9;
   }
 
+  /** Current internal state, for serialization. */
+  getState(): number {
+    return this.state >>> 0;
+  }
+
+  /** Restore a previously captured state. */
+  setState(state: number): void {
+    this.state = state >>> 0;
+  }
+
   /** Float in [0, 1). */
   next(): number {
     this.state |= 0;

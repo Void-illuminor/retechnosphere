@@ -50,6 +50,16 @@ export function resetCreatureIds(): void {
   nextCreatureId = 1;
 }
 
+/** Next id that will be assigned — for serialization. */
+export function getNextCreatureId(): number {
+  return nextCreatureId;
+}
+
+/** Restore the id counter when loading a saved world. */
+export function setNextCreatureId(n: number): void {
+  nextCreatureId = Math.max(1, n | 0);
+}
+
 export interface SpawnOpts {
   x: number;
   y: number;

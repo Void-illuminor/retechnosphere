@@ -37,6 +37,16 @@ export interface LifeEvent {
 
 let nextEventId = 1;
 
+/** Next event id — for serialization. */
+export function getNextEventId(): number {
+  return nextEventId;
+}
+
+/** Restore the event id counter when loading a saved world. */
+export function setNextEventId(n: number): void {
+  nextEventId = Math.max(1, n | 0);
+}
+
 export function makeEvent(
   kind: LifeEventKind,
   time: number,

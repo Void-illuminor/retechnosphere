@@ -1,9 +1,9 @@
-/** Heads-up readout of the whole ecosystem, with a live population graph. */
-import { World } from "../sim/world";
+/** Heads-up readout of the whole shared ecosystem, with a live population graph. */
 import { formatSimTime } from "../sim/events";
+import type { ClientState } from "../sim/wire";
 
 interface Props {
-  world: World;
+  state: ClientState;
 }
 
 function graphPath(values: number[], max: number, w: number, h: number): string {
@@ -18,9 +18,9 @@ function graphPath(values: number[], max: number, w: number, h: number): string 
   return d.trim();
 }
 
-export default function Hud({ world }: Props) {
-  const s = world.stats();
-  const hist = world.popHistory;
+export default function Hud({ state }: Props) {
+  const s = state.stats;
+  const hist = state.popHistory;
   const w = 186;
   const h = 46;
   const herb = hist.map((p) => p.herb);
@@ -31,8 +31,8 @@ export default function Hud({ world }: Props) {
     <div className="hud panel">
       <h3>◈ TechnoSphere Monitor</h3>
       <div className="row">
-        <span className="k">Sim time</span>
-        <span className="v">{formatSimTime(world.time)}</span>
+        <span className="k">World age</span>
+        <span className="v">{formatSimTime(state.time)}</span>
       </div>
       <div className="row">
         <span className="k">Grazers</span>
@@ -62,7 +62,7 @@ export default function Hud({ world }: Props) {
         <path d={graphPath(carn, max, w, h)} fill="none" stroke="#ff7a59" strokeWidth={1.5} />
       </svg>
       <div className="hint" style={{ textAlign: "center", marginTop: 2 }}>
-        population over time
+        one shared world · population over time
       </div>
     </div>
   );

@@ -1,26 +1,33 @@
 {
   "name": "retechnosphere",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "A faithful recreation of TechnoSphere (1995-2002), the online digital-ecology where you build creatures and release them into a living world.",
+  "description": "A faithful recreation of TechnoSphere (1995-2002): a shared, persistent, online digital-ecology where families build creatures, release them into one living world, and get email field reports.",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "concurrently -k -n web,sim -c cyan,green \"vite\" \"tsx watch server/index.ts\"",
+    "dev:server": "tsx watch server/index.ts",
+    "build": "tsc && tsc -p tsconfig.server.json && vite build",
+    "start": "tsx server/index.ts",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json && tsc -p tsconfig.scripts.json",
     "sim:test": "tsx scripts/simtest.ts"
   },
   "dependencies": {
+    "compression": "^1.7.5",
+    "express": "^4.21.2",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
+    "@types/compression": "^1.7.5",
+    "@types/express": "^4.17.21",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "tsx": "^4.19.2",
+    "concurrently": "^9.1.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11"
   }

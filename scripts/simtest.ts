@@ -11,7 +11,7 @@ import { World } from "../src/sim/world";
 const SEED = Number(process.argv[2] ?? 12345);
 const SIM_SECONDS = Number(process.argv[3] ?? 240);
 
-const world = new World(SEED);
+const world = World.createFresh(SEED);
 
 // Release a couple of player bloodlines so we exercise the event log too.
 const designRng = new Rng(SEED ^ 0xabcdef);
@@ -59,3 +59,29 @@ if (final.population === 0) {
   process.exit(1);
 }
 console.log("\nOK: ecosystem survived.");
+
+// --- snapshot round-trip determinism check ---------------------------------
+// Save the world, restore a copy, advance both identically, and confirm they
+// stay bit-for-bit in sync. This proves the persistence layer is faithful.
+console.log("\n--- snapshot round-trip ---");
+const snap = JSON.parse(JSON.stringify(world.toSnapshot()));
+const restored = World.fromSnapshot(snap);
+let mismatch = "";
+for (let i = 0; i < 30 * 20; i++) {
+  world.update(STEP, 1);
+  restored.update(STEP, 1);
+}
+const a = world.stats();
+const b = restored.stats();
+for (const k of Object.keys(a) as (keyof typeof a)[]) {
+  if (a[k] !== b[k]) mismatch += ` ${k}: ${a[k]} != ${b[k]}`;
+}
+if (world.events.length !== restored.events.length) {
+  mismatch += ` events: ${world.events.length} != ${restored.events.length}`;
+}
+if (mismatch) {
+  console.error("MISMATCH after restore —" + mismatch);
+  process.exit(1);
+}
+console.log(`OK: original and restored worlds identical after 20s (pop=${a.population}, gen=${a.generation}).`);
+

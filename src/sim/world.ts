@@ -10,15 +10,25 @@ import {
   Behaviour,
   Creature,
   energyFrac,
+  getNextCreatureId,
   makeCreature,
   resetCreatureIds,
+  setNextCreatureId,
 } from "./creature";
-import { LifeEvent, LifeEventKind, makeEvent } from "./events";
+import {
+  LifeEvent,
+  LifeEventKind,
+  getNextEventId,
+  makeEvent,
+  setNextEventId,
+} from "./events";
 import { Diet, Genome, breed, deriveStats, generateName, mutate, randomGenome } from "./genome";
 import { SpatialHash } from "./grid";
 import { Rng } from "./rng";
 import { Terrain } from "./terrain";
 import { TAU, angleDiff, clamp, dist } from "./vec";
+import { SNAPSHOT_VERSION } from "./wire";
+import type { ClientCreature, ClientLineage, ClientState, WorldSnapshot } from "./wire";
 
 export interface Plant {
   x: number;
@@ -36,6 +46,10 @@ export interface Lineage {
   deaths: number;
   bestGeneration: number;
   extinct: boolean;
+  /** Email of the family member who founded this bloodline (server-side only). */
+  ownerEmail?: string;
+  /** Their display name (safe to show to everyone). */
+  ownerName?: string;
 }
 
 export interface WorldStats {
@@ -65,6 +79,7 @@ export class World {
   lineages = new Map<number, Lineage>();
   popHistory: PopSample[] = [];
 
+  readonly seed: number;
   time = 0;
   births = 0;
   deaths = 0;
@@ -78,13 +93,25 @@ export class World {
   private sampleTimer = 0;
   private immigrationTimer = 0;
 
+  /**
+   * Builds an EMPTY world. The terrain is generated from a dedicated RNG stream
+   * keyed only on the seed, so any client can reproduce identical terrain from
+   * the seed alone. Call populate() for a fresh ecosystem, or loadSnapshot() to
+   * restore a saved one.
+   */
   constructor(seed = (Math.random() * 0xffffffff) >>> 0) {
-    this.rng = new Rng(seed);
-    resetCreatureIds();
-    this.terrain = new Terrain(WORLD.width, WORLD.height, this.rng);
+    this.seed = seed >>> 0;
+    this.terrain = new Terrain(WORLD.width, WORLD.height, new Rng(this.seed));
+    this.rng = new Rng((this.seed ^ 0x9e3779b9) >>> 0);
     this.creatureGrid = new SpatialHash(WORLD.width, WORLD.height, 140);
     this.plantGrid = new SpatialHash(WORLD.width, WORLD.height, 120);
-    this.seed();
+  }
+
+  /** Create a fresh, populated world in one call. */
+  static createFresh(seed?: number): World {
+    const w = new World(seed);
+    w.populate();
+    return w;
   }
 
   // ---------------------------------------------------------------- seeding
@@ -108,7 +135,9 @@ export class World {
     return null;
   }
 
-  seed(): void {
+  /** Seed a fresh world with plants and wild stock. */
+  populate(): void {
+    resetCreatureIds();
     // Pre-grow a field of plants.
     for (let i = 0; i < FOOD.target; i++) {
       const p = this.fertilePoint();
@@ -134,7 +163,7 @@ export class World {
   }
 
   /** Release a player-designed creature and start a new bloodline for it. */
-  addFounder(genome: Genome, name: string): Creature {
+  addFounder(genome: Genome, name: string, owner?: { email?: string; displayName?: string }): Creature {
     const p = this.randomLandPoint();
     const c = makeCreature(genome, {
       x: p.x,
@@ -157,12 +186,15 @@ export class World {
       deaths: 0,
       bestGeneration: 0,
       extinct: false,
+      ownerEmail: owner?.email,
+      ownerName: owner?.displayName,
     });
+    const who = owner?.displayName ? `${owner.displayName} released` : "You released";
     this.pushEvent(
       "released",
       c,
       `${name} released into TechnoSphere`,
-      `You released ${name}, a ${genome.diet}, into the digital ecology. Its fate is now its own. We'll write when something happens.`,
+      `${who} ${name}, a ${genome.diet}, into the digital ecology. Its fate is now its own. We'll write when something happens.`,
       true,
     );
     return c;
@@ -655,7 +687,115 @@ export class World {
   lineageMembers(lineageId: number): Creature[] {
     return this.creatures.filter((c) => c.lineageId === lineageId);
   }
+
+  // ------------------------------------------------------- serialization
+
+  /** Compact view of the world for streaming to browsers (terrain excluded). */
+  toClientState(): ClientState {
+    const creatures: ClientCreature[] = this.creatures.map((c) => ({
+      id: c.id,
+      x: r1(c.x),
+      y: r1(c.y),
+      angle: r3(c.angle),
+      speed: r1(c.speed),
+      diet: c.genome.diet,
+      hue: Math.round(c.genome.hue),
+      accent: r2(c.genome.accent),
+      sizeGene: r2(c.genome.sizeGene),
+      parts: c.genome.parts,
+      radius: r1(c.stats.radius),
+      ef: r2(c.energy / c.stats.maxEnergy),
+      beh: c.behaviour,
+      lineageId: c.lineageId,
+      gen: c.generation,
+      founder: c.founder,
+      name: c.name,
+      age: Math.round(c.age),
+      meals: c.meals,
+      kills: c.kills,
+      offspring: c.offspring,
+    }));
+    const lineages: ClientLineage[] = [...this.lineages.values()].map((l) => ({
+      id: l.id,
+      founderName: l.founderName,
+      ownerName: l.ownerName,
+      diet: l.diet,
+      hue: l.hue,
+      alive: l.alive,
+      born: l.born,
+      deaths: l.deaths,
+      bestGeneration: l.bestGeneration,
+      extinct: l.extinct,
+    }));
+    return {
+      time: r1(this.time),
+      seed: this.seed,
+      width: WORLD.width,
+      height: WORLD.height,
+      stats: this.stats(),
+      popHistory: this.popHistory,
+      lineages,
+      creatures,
+      plants: this.plants.map((p) => ({ x: r1(p.x), y: r1(p.y), g: r2(p.growth) })),
+      serverNow: Date.now(),
+    };
+  }
+
+  /** Full-fidelity snapshot for persisting the world to disk. */
+  toSnapshot(): WorldSnapshot {
+    return {
+      version: SNAPSHOT_VERSION,
+      seed: this.seed,
+      time: this.time,
+      births: this.births,
+      deaths: this.deaths,
+      maxGeneration: this.maxGeneration,
+      rngState: this.rng.getState(),
+      nextCreatureId: getNextCreatureId(),
+      nextEventId: getNextEventId(),
+      foodCredit: this.foodCredit,
+      sampleTimer: this.sampleTimer,
+      immigrationTimer: this.immigrationTimer,
+      creatures: this.creatures.map(({ stats: _stats, ...rest }) => rest),
+      plants: this.plants.map((p) => ({ ...p })),
+      events: this.events.map((e) => ({ ...e })),
+      lineages: [...this.lineages.values()].map((l) => ({ ...l })),
+      popHistory: this.popHistory.map((s) => ({ ...s })),
+      savedAtMs: Date.now(),
+    };
+  }
+
+  /** Restore world state from a snapshot (terrain comes from the constructor seed). */
+  loadSnapshot(snap: WorldSnapshot): void {
+    this.time = snap.time;
+    this.births = snap.births;
+    this.deaths = snap.deaths;
+    this.maxGeneration = snap.maxGeneration;
+    this.rng.setState(snap.rngState);
+    setNextCreatureId(snap.nextCreatureId);
+    setNextEventId(snap.nextEventId);
+    this.foodCredit = snap.foodCredit;
+    this.sampleTimer = snap.sampleTimer;
+    this.immigrationTimer = snap.immigrationTimer;
+    this.creatures = snap.creatures.map((dto) => ({ ...dto, stats: deriveStats(dto.genome) }));
+    this.plants = snap.plants.map((p) => ({ ...p }));
+    this.events = snap.events.map((e) => ({ ...e }));
+    this.lineages = new Map(snap.lineages.map((l) => [l.id, { ...l }]));
+    this.popHistory = snap.popHistory.map((s) => ({ ...s }));
+    this.accumulator = 0;
+    this.newborns = [];
+  }
+
+  static fromSnapshot(snap: WorldSnapshot): World {
+    const w = new World(snap.seed);
+    w.loadSnapshot(snap);
+    return w;
+  }
 }
+
+const r1 = (n: number): number => Math.round(n * 10) / 10;
+const r2 = (n: number): number => Math.round(n * 100) / 100;
+const r3 = (n: number): number => Math.round(n * 1000) / 1000;
 
 /** Maximum energy a genome will yield once derived — used to size starting energy. */
 function deriveMax(genome: Genome): number {
