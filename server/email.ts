@@ -36,12 +36,43 @@ function smtp(): Transporter {
   return transporter;
 }
 
+/** Parse `EMAIL_FROM` ("Name <email>" or "email") into parts. */
+function parseFrom(from: string): { email: string; name?: string } {
+  const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (m) return { name: m[1] || undefined, email: m[2] };
+  return { email: from.trim() };
+}
+
 export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
   const mode = config.emailMode;
 
   if (mode === "dry-run") {
     console.log(`[email:dry-run] to=${msg.to} subject="${msg.subject}"`);
     return { ok: true, dryRun: true };
+  }
+
+  if (mode === "brevo") {
+    try {
+      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: { "api-key": config.brevoKey, "Content-Type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          sender: parseFrom(config.email.from),
+          to: [{ email: msg.to }],
+          subject: msg.subject,
+          htmlContent: msg.html,
+          textContent: msg.text,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        return { ok: false, error: `Brevo ${res.status}: ${body.slice(0, 300)}` };
+      }
+      const data = (await res.json().catch(() => ({}))) as { messageId?: string };
+      return { ok: true, id: data.messageId };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   }
 
   if (mode === "smtp") {

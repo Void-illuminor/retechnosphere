@@ -65,8 +65,17 @@ export const config = {
     },
   },
 
-  /** Which email transport is active. SMTP (e.g. Gmail) wins, then Resend. */
-  get emailMode(): "smtp" | "resend" | "dry-run" {
+  /**
+   * Brevo (https://brevo.com) transactional email over HTTPS. The best
+   * no-domain option on hosts that block SMTP (like Railway): verify your own
+   * email (e.g. your Gmail) as a Brevo sender, set BREVO_API_KEY, and digests
+   * reach the whole family. Takes priority over SMTP/Resend.
+   */
+  brevoKey: process.env.BREVO_API_KEY || "",
+
+  /** Which email transport is active. */
+  get emailMode(): "brevo" | "smtp" | "resend" | "dry-run" {
+    if (process.env.BREVO_API_KEY) return "brevo";
     if (SMTP_HOST && SMTP_USER && SMTP_PASS) return "smtp";
     if (process.env.RESEND_API_KEY) return "resend";
     return "dry-run";
