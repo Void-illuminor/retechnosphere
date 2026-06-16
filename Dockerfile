@@ -14,7 +14,5 @@ ENV DATA_DIR=/data
 # Railway (and most hosts) inject PORT at runtime; the server falls back to 8787.
 EXPOSE 8787
 
-# Persist the world here (mount a volume at /data in production).
-VOLUME ["/data"]
-
+# Persist the world by mounting a volume at /data (Railway Volumes / docker -v).
 CMD ["npm", "start"]
