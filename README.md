@@ -4,34 +4,37 @@ A recreation of **[TechnoSphere](https://en.wikipedia.org/wiki/TechnoSphere_(vir
 (1995–2002) — Jane Prophet & Dr. Gordon Selley's pioneering online "digital
 ecology", one of the web's first artificial-life worlds.
 
-Design a creature out of mechanical body parts, release it into **one living
-world shared by everyone**, and follow your bloodline as it roams, grazes or
-hunts, mates, breeds, evolves and dies — entirely on its own. The world runs on
-a server and **keeps living whether you're watching or not**, and (just like the
-original) it **emails you** a daily field report of how your creatures are faring.
+Design a creature out of mechanical body parts and release it into **one living
+world shared by everyone**. Like the original, you don't watch a map — you keep a
+**roster of your creatures** and click one to read its **dossier**: its
+encounters, its offspring, its whole life story. The world runs on a server and
+**keeps living whether you're watching or not**, and it **emails you** a daily
+field report of how your bloodline is faring.
 
 ![the creature builder](docs/builder.png)
-![the live shared world](docs/world.png)
+![your creature roster](docs/roster.png)
+![a creature dossier](docs/dossier.png)
 
 ## Features
 
-- **One shared, persistent world.** A single Node server owns the simulation,
-  saves it to disk, and streams it to every browser. Share the URL and the whole
-  family explores the same ecology. Leave and come back — it kept going, and if
-  the server was ever down it **fast-forwards** to make up the lost time.
+- **Original-style roster & dossier.** Your bloodlines as a list of creatures
+  (alive and dead); click one for its full dossier — stats, parents and offspring
+  (navigate the family tree), and a chronological life story of every encounter.
+- **One shared, persistent world.** A single Node server owns the simulation and
+  saves it to disk. Share the URL and the whole family joins the same ecology.
+  Leave and come back — it kept going; after downtime it **fast-forwards** to make
+  up the lost time.
 - **Creature builder.** Pick a diet (Grazer/Prowler), assemble five body parts
-  (each a real stat trade-off), tune colour and size, and watch a live preview
-  drawn from the same code that renders the world.
+  (each a real stat trade-off), tune colour and size, with a live portrait.
 - **Real artificial life.** Energy/metabolism, vision-based sensing, foraging,
   predator/prey chases, fleeing, mating with genetic crossover + mutation,
   budding, ageing and death. Populations oscillate and creatures **evolve across
   generations** with no scripting.
-- **Email field reports.** A daily digest (via [Resend](https://resend.com))
-  summarises what your bloodlines did — births, kills, losses, new generations —
-  with one-click unsubscribe. Toggle it on/off in-app.
-- **Smooth on the wire.** Browsers poll ~1×/second and dead-reckon motion at
-  60fps, so it looks alive without heavy bandwidth.
-- **Faithful retro skin** — beveled panels, CRT scanlines, neon accents.
+- **Email field reports.** A daily digest summarises what your bloodlines did —
+  births, kills, losses, new generations — with one-click unsubscribe. Sends via
+  **Gmail** (no domain needed) or **Resend**.
+- **Faithful retro look** — shaded, side-on mechanical creatures (the signature
+  wheels), beveled panels, CRT scanlines, neon accents.
 
 ## Quick start (local)
 
@@ -61,10 +64,10 @@ npm run sim:test    # headless engine + snapshot-determinism check (no browser)
 ## How it works
 
 ```
-Browser (React)  ──poll /api/state──▶  Node server  ──▶  data/ (JSON on disk)
-  renders + dead-reckons               owns the World        world + subscribers
-  builder POSTs /api/release           runs the sim loop     + durable event log
-  reads /api/events (inbox)            sends digests ──▶ Resend
+Browser (React)  ──/api/creatures────▶  Node server  ──▶  data/ (JSON on disk)
+  roster + dossier                      owns the World      world + subscribers
+  builder POSTs /api/release            runs the sim loop   + per-creature dossier
+  /api/creature/:id, /api/feed          sends digests ──▶ Gmail / Resend
 ```
 
 - The **simulation engine** (`src/sim/`) is pure, DOM-free TypeScript, so the
@@ -159,9 +162,10 @@ You can send digests **without owning a domain** — use Gmail.
 
 ```
 src/sim/        pure simulation engine (shared by server + client; serializable)
-src/render/     canvas drawing (creatures from genome, world renderer)
+src/render/     canvas drawing (drawCreaturePortrait — shaded side-on creatures)
 src/net/        browser API client
-src/components/ React UI (Intro, Builder, WorldView, Hud, Inbox, Inspector)
+src/components/ React UI (Intro, Builder, CreaturePreview, CreaturePortrait,
+                Roster, CreatureDetail, StatBars)
 server/         Express server: world manager, storage, email, digests, API
 scripts/        simtest.ts (headless engine test), smoke.mjs (Puppeteer e2e)
 Dockerfile · render.yaml · .env.example   deployment
