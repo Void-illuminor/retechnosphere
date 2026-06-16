@@ -1,50 +1,20 @@
-# Render Blueprint. In the Render dashboard: New > Blueprint, point it at this
-# repo, and apply. Then set RESEND_API_KEY and PUBLIC_URL (and EMAIL_FROM) in the
-# service's Environment tab. A persistent disk keeps the shared world alive across
-# deploys and restarts (requires a paid instance type; free services have no disk
-# and spin down when idle).
+# Render Blueprint — STATIC FRONTEND only (the backend runs on Railway).
+# In Render: New > Blueprint, select this repo, apply. Then set VITE_API_BASE
+# (in the static site's Environment) to your Railway backend URL and redeploy,
+# so the built client knows where the API lives.
+#
+# (Prefer one host? Delete this file and deploy the Dockerfile alone — the
+#  server serves the client and API together. See README.)
 services:
   - type: web
-    name: retechnosphere
-    runtime: node
-    plan: starter
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
-    healthCheckPath: /api/health
-    autoDeploy: true
-    disk:
-      name: world-data
-      mountPath: /data
-      sizeGB: 1
+    name: retechnosphere-web
+    runtime: static
+    buildCommand: npm ci && npm run build:client
+    staticPublishPath: ./dist
     envVars:
-      - key: NODE_VERSION
-        value: "22.11.0"
-      - key: DATA_DIR
-        value: /data
-      - key: SIM_SPEED
-        value: "1"
-      # The world will fast-forward up to this many sim-seconds after downtime.
-      - key: CATCHUP_CAP_SECONDS
-        value: "7200"
-      # --- email (Resend): set these in the dashboard ---
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        value: "reTechnoSphere <onboarding@resend.dev>"
-      - key: PUBLIC_URL
-        sync: false
-      # --- secrets for admin + external cron (auto-generated) ---
-      - key: ADMIN_SECRET
-        generateValue: true
-      - key: CRON_SECRET
-        generateValue: true
-
-  # OPTIONAL: a scheduler that pokes the server so daily digests go out reliably
-  # even on instance types that idle. Safe to delete if your web service is
-  # always-on (the server also schedules digests itself).
-  # - type: cron
-  #   name: retechnosphere-digest
-  #   runtime: node
-  #   schedule: "0 * * * *"
-  #   buildCommand: npm ci
-  #   startCommand: 'curl -fsS -X POST "$PUBLIC_URL/api/cron?key=$CRON_SECRET"'
+      - key: VITE_API_BASE
+        sync: false # set to e.g. https://retechnosphere.up.railway.app
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

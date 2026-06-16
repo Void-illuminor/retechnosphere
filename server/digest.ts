@@ -61,8 +61,9 @@ function countLine(counts: Record<string, number>): string {
 function buildDigest(sub: Subscriber, reports: LineageReport[], totalEvents: number): OutgoingEmail {
   const world = worldManager.getWorld();
   const stats = world.stats();
-  const link = config.publicUrl || "";
-  const unsub = link ? `${link}/unsubscribe?token=${sub.token}` : "";
+  const link = config.publicUrl || ""; // frontend (Render) — "visit" link
+  const unsubBase = config.apiPublicUrl || link; // backend (Railway) — serves /unsubscribe
+  const unsub = unsubBase ? `${unsubBase}/unsubscribe?token=${sub.token}` : "";
 
   const lineHtml = reports
     .map((r) => {

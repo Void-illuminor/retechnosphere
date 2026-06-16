@@ -10,8 +10,8 @@ COPY . .
 RUN npm run build && npm prune --omit=dev
 
 ENV NODE_ENV=production
-ENV PORT=8787
 ENV DATA_DIR=/data
+# Railway (and most hosts) inject PORT at runtime; the server falls back to 8787.
 EXPOSE 8787
 
 # Persist the world here (mount a volume at /data in production).

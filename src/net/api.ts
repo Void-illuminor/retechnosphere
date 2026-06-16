@@ -2,6 +2,11 @@
 import type { Genome } from "../sim/genome";
 import type { ClientState } from "../sim/wire";
 
+// When the client is served by a different host than the API (e.g. a static
+// frontend on Render talking to a backend on Railway), set VITE_API_BASE at
+// build time to the backend's URL. Empty = same-origin (combined deployment).
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+
 export interface StoredEventDTO {
   id: number;
   simTime: number;
@@ -43,13 +48,13 @@ export interface ReleasePayload extends Genome {
 }
 
 async function jget<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(API_BASE + url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return (await res.json()) as T;
 }
 
 async function jpost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(API_BASE + url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

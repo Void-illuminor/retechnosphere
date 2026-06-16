@@ -8,6 +8,7 @@
     "dev": "concurrently -k -n web,sim -c cyan,green \"vite\" \"tsx watch server/index.ts\"",
     "dev:server": "tsx watch server/index.ts",
     "build": "tsc && tsc -p tsconfig.server.json && vite build",
+    "build:client": "tsc && vite build",
     "start": "tsx server/index.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json && tsc -p tsconfig.scripts.json",

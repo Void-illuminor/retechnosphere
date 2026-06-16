@@ -42,8 +42,13 @@ export const config = {
     },
   },
 
-  /** Public base URL, used to build links inside emails (e.g. unsubscribe). */
+  /** Player-facing app URL (the frontend), used for "visit" links in emails. */
   publicUrl: (process.env.PUBLIC_URL || "").replace(/\/$/, ""),
+  /** This backend's own public URL, used for the unsubscribe link in emails.
+   * Falls back to PUBLIC_URL for combined (single-host) deployments. */
+  apiPublicUrl: (process.env.API_PUBLIC_URL || process.env.PUBLIC_URL || "").replace(/\/$/, ""),
+  /** Allowed CORS origin(s), comma-separated. "*" allows any (no cookies used). */
+  corsOrigin: process.env.CORS_ORIGIN || "*",
   /** Shared secret to allow an external scheduler to hit /api/cron. */
   cronSecret: process.env.CRON_SECRET || "",
   /** Shared secret for admin actions (reset world, etc.). */

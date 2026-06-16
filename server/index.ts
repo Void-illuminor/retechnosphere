@@ -14,6 +14,25 @@ import { worldManager } from "./worldManager";
 
 const app = express();
 app.use(compression());
+
+// CORS — needed when the frontend is hosted separately (Render) from this API
+// (Railway). No cookies are used (identity is a bearer token), so "*" is safe;
+// set CORS_ORIGIN to lock it to your frontend URL.
+const corsOrigins = config.corsOrigin.split(",").map((s) => s.trim());
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (corsOrigins.includes("*")) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  } else if (origin && corsOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json({ limit: "64kb" }));
 
 // --- API -------------------------------------------------------------------
