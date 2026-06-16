@@ -1,8 +1,12 @@
 /**
- * Email delivery via Resend (https://resend.com). If no RESEND_API_KEY is set,
- * runs in dry-run mode and just logs the message, so the whole pipeline is
- * exercisable locally without sending real mail.
+ * Email delivery. Three transports, chosen automatically (see config.emailMode):
+ *   - "smtp"   : nodemailer over SMTP — e.g. Gmail with an App Password. This is
+ *                how you email a whole family WITHOUT owning a domain.
+ *   - "resend" : Resend HTTP API (needs a verified domain to reach non-owners).
+ *   - "dry-run": no credentials set — messages are logged, not sent.
  */
+import * as nodemailer from "nodemailer";
+import type { Transporter } from "nodemailer";
 import { config } from "./config";
 
 export interface OutgoingEmail {
@@ -19,11 +23,43 @@ export interface SendResult {
   dryRun?: boolean;
 }
 
+let transporter: Transporter | null = null;
+function smtp(): Transporter {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: config.smtp.host,
+      port: config.smtp.port,
+      secure: config.smtp.secure,
+      auth: { user: config.smtp.user, pass: config.smtp.pass },
+    });
+  }
+  return transporter;
+}
+
 export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
-  if (!config.email.enabled) {
+  const mode = config.emailMode;
+
+  if (mode === "dry-run") {
     console.log(`[email:dry-run] to=${msg.to} subject="${msg.subject}"`);
     return { ok: true, dryRun: true };
   }
+
+  if (mode === "smtp") {
+    try {
+      const info = await smtp().sendMail({
+        from: config.email.from,
+        to: msg.to,
+        subject: msg.subject,
+        html: msg.html,
+        text: msg.text,
+      });
+      return { ok: true, id: info.messageId };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  // Resend HTTP API.
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

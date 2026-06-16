@@ -7,6 +7,14 @@ function num(name: string, def: number): number {
   return Number.isFinite(n) ? n : def;
 }
 
+// Gmail shortcut + generic SMTP, resolved once at startup.
+const GMAIL_USER = process.env.GMAIL_USER || "";
+const GMAIL_PASS = process.env.GMAIL_APP_PASSWORD || "";
+const SMTP_HOST = process.env.SMTP_HOST || (GMAIL_USER ? "smtp.gmail.com" : "");
+const SMTP_PORT = num("SMTP_PORT", GMAIL_USER ? 465 : 587);
+const SMTP_USER = process.env.SMTP_USER || GMAIL_USER;
+const SMTP_PASS = process.env.SMTP_PASS || GMAIL_PASS;
+
 export const config = {
   /** Port to listen on (Render sets PORT). */
   port: num("PORT", 8787),
@@ -34,12 +42,34 @@ export const config = {
     checkMs: num("DIGEST_CHECK_MS", 15 * 60 * 1000),
   },
 
+  /**
+   * SMTP transport (e.g. Gmail). This is the way to email a whole family WITHOUT
+   * owning a domain: create a Gmail App Password and set GMAIL_USER +
+   * GMAIL_APP_PASSWORD (or generic SMTP_* vars). SMTP takes priority over Resend.
+   */
+  smtp: {
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : SMTP_PORT === 465,
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
+
   email: {
     apiKey: process.env.RESEND_API_KEY || "",
-    from: process.env.EMAIL_FROM || "reTechnoSphere <onboarding@resend.dev>",
+    from:
+      process.env.EMAIL_FROM ||
+      (GMAIL_USER ? `reTechnoSphere <${GMAIL_USER}>` : "reTechnoSphere <onboarding@resend.dev>"),
     get enabled() {
       return !!process.env.RESEND_API_KEY;
     },
+  },
+
+  /** Which email transport is active. SMTP (e.g. Gmail) wins, then Resend. */
+  get emailMode(): "smtp" | "resend" | "dry-run" {
+    if (SMTP_HOST && SMTP_USER && SMTP_PASS) return "smtp";
+    if (process.env.RESEND_API_KEY) return "resend";
+    return "dry-run";
   },
 
   /** Player-facing app URL (the frontend), used for "visit" links in emails. */

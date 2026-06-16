@@ -111,7 +111,20 @@ docker run -p 8787:8787 -v retechno-data:/data \
 On Railway, deploy from the repo and add a **Volume** mounted at `/data`, plus
 the same environment variables.
 
-## Email setup (Resend)
+## Email setup
+
+You can send digests **without owning a domain** — use Gmail.
+
+### Gmail (no domain needed — easiest for families)
+
+1. Enable **2-Step Verification** on your Google account.
+2. Create an **App Password** at https://myaccount.google.com/apppasswords.
+3. Set `GMAIL_USER` (your address) and `GMAIL_APP_PASSWORD` (the app password).
+   Digests then send from your Gmail to anyone. SMTP is used automatically when
+   these are set (it takes priority over Resend). `EMAIL_FROM` defaults to your
+   Gmail address. Any SMTP provider works via the generic `SMTP_*` vars too.
+
+### Resend (Resend setup)
 
 1. Create an account at [resend.com](https://resend.com) and an API key.
 2. For real delivery, **verify a domain** and set `EMAIL_FROM` to an address on

@@ -140,7 +140,7 @@ worldManager.start();
 startDigestScheduler();
 
 const server = app.listen(config.port, () => {
-  console.log(`[server] listening on :${config.port}  (email ${config.email.enabled ? "via Resend" : "DRY-RUN"}, simSpeed ${config.simSpeed}x)`);
+  console.log(`[server] listening on :${config.port}  (email: ${config.emailMode}, simSpeed ${config.simSpeed}x)`);
 });
 
 function shutdown(signal: string) {
