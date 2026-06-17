@@ -1,6 +1,7 @@
 /**
  * Tunable parameters for the digital ecology. Collected in one place so the
- * predator/prey balance can be adjusted without hunting through the engine.
+ * predator/prey balance and the overall pace can be adjusted without hunting
+ * through the engine.
  */
 export const WORLD = {
   width: 2600,
@@ -15,44 +16,40 @@ export const FOOD = {
   /** Target number of plants alive in fertile terrain. */
   target: 340,
   /** Plants (re)grown per simulation second toward the target. */
-  growthPerSecond: 22,
+  growthPerSecond: 18,
   /** Energy a fully grown plant yields. */
-  energy: 48,
+  energy: 55,
   /** Seconds for a plant to grow from sprout to ripe. */
-  ripenTime: 6,
+  ripenTime: 9,
   radius: 7,
 } as const;
 
 export const LIFE = {
   /** Initial wild population when a world is seeded. */
-  startHerbivores: 44,
-  startCarnivores: 9,
-  /** Below this herbivore count, the world spontaneously seeds new wildlife. */
-  reseedThreshold: 8,
+  startHerbivores: 40,
+  startCarnivores: 12,
+
   /**
-   * Predators struggle to find mates when sparse, so — as the original relied on
-   * a steady stream of user-created creatures — wild "immigrants" trickle in to
-   * keep both populations from quietly going extinct.
+   * Immigration keeps the ecology diverse and well populated. Wild "migrants"
+   * trickle in toward these targets — the original world stayed alive on a
+   * constant stream of user-created creatures, and this stands in for that.
    */
-  carnivoreFloor: 3,
-  immigrationInterval: 5,
+  immigrationInterval: 4,
+  /** Keep at least this many grazers / prowlers via immigration. */
+  herbivoreFloor: 46,
+  carnivoreFloor: 5,
+  /** Keep topping the world up toward this population for diversity. */
+  wildPopTarget: 110,
+
+  // --- reproduction (sexual only; budding removed) ---
   /** Fraction of max energy needed before a creature will mate. */
-  mateEnergyFrac: 0.55,
+  mateEnergyFrac: 0.72,
   /** Energy each parent spends to produce one offspring. */
-  mateCost: 0.28,
+  mateCost: 0.42,
   /** Seconds between matings for one creature. */
-  mateCooldown: 14,
+  mateCooldown: 55,
   /** Seconds before a creature is mature enough to reproduce. */
-  maturity: 9,
+  maturity: 25,
   /** Probability per gene of mutation when breeding. */
   mutationRate: 0.12,
-  /**
-   * Budding fallback: a creature thriving alone (no mate in sight) can still
-   * reproduce by division once extremely well fed. This lets sparse predators
-   * grow their numbers so predator/prey cycles actually occur, while dense
-   * populations still reproduce mainly by mating.
-   */
-  budEnergyFrac: 0.9,
-  budCost: 0.42,
-  budChancePerSecond: 0.14,
 } as const;

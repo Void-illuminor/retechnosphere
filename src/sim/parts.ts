@@ -83,7 +83,7 @@ export const PARTS: PartDef[] = [
   // ---- Bodies / chassis -------------------------------------------------
   part("body_tank", "body", "Tank Chassis", "Heavy frame. Huge reserves and armour, but sluggish.", {
     energy: 90,
-    metabolism: 1.4,
+    metabolism: 0.8,
     armor: 7,
     speed: -10,
     agility: -0.6,
@@ -97,7 +97,7 @@ export const PARTS: PartDef[] = [
   }),
   part("body_sleek", "body", "Sleek Hull", "Lightweight racing body. Fast, fragile, hungry.", {
     energy: 30,
-    metabolism: 1.1,
+    metabolism: 0.6,
     speed: 14,
     agility: 0.8,
     armor: -1,
@@ -157,7 +157,7 @@ export const PARTS: PartDef[] = [
   part("loco_hover", "locomotion", "Hover Pads", "Frictionless drifting. Fast and nimble but power-hungry.", {
     speed: 18,
     agility: 1.0,
-    metabolism: 1.3,
+    metabolism: 0.7,
   }),
 
   // ---- Eyes -------------------------------------------------------------

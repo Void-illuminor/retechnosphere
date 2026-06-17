@@ -97,22 +97,25 @@ export function deriveStats(genome: Genome): DerivedStats {
   const p = summedParts(genome);
   const carn = genome.diet === "carnivore";
 
-  // Diet baselines: carnivores are faster, see further and hit harder;
-  // herbivores carry more reserve energy and feed more efficiently on plants.
-  const baseEnergy = carn ? 150 : 130;
-  const baseMetabolism = carn ? 3.6 : 2.7;
+  // Diet baselines: carnivores are faster, see further and hit harder, and
+  // carry large reserves (a kill must last a while); herbivores feed more
+  // efficiently on plants. Metabolism is deliberately low so the pace is calm
+  // and prowlers don't starve between kills.
+  const baseEnergy = carn ? 210 : 160;
+  const baseMetabolism = carn ? 2.3 : 1.8;
   const baseSpeed = carn ? 64 : 52;
   const baseAgility = carn ? 2.0 : 1.8;
-  const baseVision = carn ? 150 : 130;
-  const baseAttack = carn ? 8 : 0;
+  const baseVision = carn ? 165 : 130;
+  const baseAttack = carn ? 9 : 0;
   const baseFeeding = carn ? 0.9 : 1.0;
 
-  const maxEnergy = Math.max(40, (baseEnergy + p.energy) * genome.vigor);
+  const maxEnergy = Math.max(60, (baseEnergy + p.energy) * genome.vigor);
   const radius = clamp((10 + p.bulk + p.armor * 0.4) * genome.sizeGene, 7, 26);
 
   return {
     maxEnergy,
-    metabolism: Math.max(0.6, (baseMetabolism + p.metabolism) * genome.vigor),
+    // Cap the per-part metabolism contribution so no combo is a death sentence.
+    metabolism: Math.max(0.5, (baseMetabolism + Math.min(p.metabolism, 1.4)) * genome.vigor),
     maxSpeed: clamp(baseSpeed + p.speed, 18, 130) / genome.sizeGene ** 0.5,
     agility: clamp(baseAgility + p.agility, 0.6, 4.5),
     vision: clamp(baseVision + p.vision, 60, 360),
@@ -120,8 +123,8 @@ export function deriveStats(genome: Genome): DerivedStats {
     armor: Math.max(0, p.armor),
     feeding: Math.max(0.3, baseFeeding + p.feeding),
     radius,
-    // Bigger, tougher creatures live longer; carnivores burn out a bit faster.
-    maxAge: clamp((110 + p.energy * 0.5 + p.armor * 3) * (carn ? 0.95 : 1.1), 70, 260),
+    // Long lives slow the generational turnover; bigger/tougher live longest.
+    maxAge: clamp((220 + p.energy * 0.4 + p.armor * 3) * (carn ? 1.0 : 1.1), 160, 460),
   };
 }
 

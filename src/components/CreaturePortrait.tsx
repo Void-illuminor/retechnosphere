@@ -36,7 +36,7 @@ export default function CreaturePortrait({ portrait, size, dead, scene }: Props)
       },
       size * 0.56,
       size * 0.47,
-      { size: size * 0.2, scene, viewW: size, viewH: size },
+      { size: size * 0.2, scene, viewW: size, viewH: size, detail: scene ? 2 : size >= 84 ? 1 : 0 },
     );
     ctx.filter = "none";
   }, [portrait, size, dead, scene]);

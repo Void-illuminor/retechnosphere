@@ -22,7 +22,7 @@ import {
   makeEvent,
   setNextEventId,
 } from "./events";
-import { Diet, Genome, breed, deriveStats, generateName, mutate, randomGenome } from "./genome";
+import { Diet, Genome, breed, deriveStats, generateName, randomGenome } from "./genome";
 import { SpatialHash } from "./grid";
 import { Rng } from "./rng";
 import { Terrain } from "./terrain";
@@ -408,19 +408,6 @@ export class World {
     c.behaviour = behaviour;
     this.steerAndMove(c, desiredAngle, desiredSpeed, dt);
 
-    // Budding: a thriving loner that found no mate this tick divides instead,
-    // so even sparse populations can grow when conditions are good.
-    if (
-      behaviour !== "court" &&
-      c.mateCooldown <= 0 &&
-      c.age > LIFE.maturity &&
-      energyFrac(c) > LIFE.budEnergyFrac &&
-      this.creatures.length + this.newborns.length < WORLD.maxCreatures &&
-      this.rng.chance(LIFE.budChancePerSecond * dt)
-    ) {
-      this.bud(c);
-    }
-
     // --- death checks -----------------------------------------------------
     if (!c.alive) return; // killed mid-step by a predator
     if (c.energy <= 0) {
@@ -464,7 +451,7 @@ export class World {
     c.speed = speed;
 
     // Movement costs energy on top of metabolism.
-    c.energy -= 0.011 * speed * dt;
+    c.energy -= 0.006 * speed * dt;
   }
 
   private nearestRipePlant(c: Creature): Plant | null {
@@ -513,7 +500,7 @@ export class World {
     victim.energy -= mitigated;
     if (victim.energy <= 0 && victim.alive) {
       // Kill: the predator gains a hearty meal.
-      const meal = victim.stats.maxEnergy * 0.5 + victim.stats.radius * 2;
+      const meal = victim.stats.maxEnergy * 0.75 + victim.stats.radius * 3 + 25;
       predator.energy = Math.min(predator.stats.maxEnergy, predator.energy + meal);
       predator.kills++;
       predator.meals++;
@@ -542,11 +529,14 @@ export class World {
     b.offspring++;
 
     const genome: Genome = breed(a.genome, b.genome, this.rng);
-    const generation = Math.max(a.generation, b.generation) + 1;
-    this.maxGeneration = Math.max(this.maxGeneration, generation);
 
-    // The child inherits a player bloodline from either parent if present.
+    // The child inherits a player bloodline from either parent if present, and
+    // its generation counts from that bloodline's founder — NOT max(parents),
+    // which would jump to a wild mate's huge generation number.
     const lineageId = a.lineageId >= 0 ? a.lineageId : b.lineageId;
+    const lineageParent = a.lineageId >= 0 ? a : b;
+    const generation = lineageParent.generation + 1;
+    this.maxGeneration = Math.max(this.maxGeneration, generation);
 
     const child = makeCreature(genome, {
       x: clamp(a.x + this.rng.range(-20, 20), 10, WORLD.width - 10),
@@ -577,47 +567,6 @@ export class World {
         parent,
         `${parent.name} has bred — generation ${generation}`,
         `${parent.name} mated with ${parent === a ? b.name : a.name}. A new creature, ${child.name}, has been born into your bloodline (generation ${generation}).`,
-        true,
-      );
-    }
-  }
-
-  private bud(c: Creature): void {
-    c.mateCooldown = LIFE.mateCooldown;
-    c.energy -= c.stats.maxEnergy * LIFE.budCost;
-    c.offspring++;
-
-    const genome = mutate(c.genome, this.rng);
-    const generation = c.generation + 1;
-    this.maxGeneration = Math.max(this.maxGeneration, generation);
-
-    const child = makeCreature(genome, {
-      x: clamp(c.x + this.rng.range(-24, 24), 10, WORLD.width - 10),
-      y: clamp(c.y + this.rng.range(-24, 24), 10, WORLD.height - 10),
-      angle: this.rng.range(0, TAU),
-      energy: deriveMax(genome) * 0.5,
-      generation,
-      lineageId: c.lineageId,
-      name: generateName(this.rng),
-      birthTime: this.time,
-    });
-    this.newborns.push(child);
-    this.births++;
-
-    if (c.lineageId >= 0) {
-      const line = this.lineages.get(c.lineageId);
-      if (line) {
-        line.born++;
-        line.alive++;
-        line.bestGeneration = Math.max(line.bestGeneration, generation);
-        line.extinct = false;
-      }
-      this.recordBirth(child, [this.parentSnap(c)]);
-      this.pushEvent(
-        "offspring",
-        c,
-        `${c.name} has budded — generation ${generation}`,
-        `Thriving on its own, ${c.name} divided and brought ${child.name} (generation ${generation}) into your bloodline.`,
         true,
       );
     }
@@ -684,14 +633,21 @@ export class World {
       if (c.genome.diet === "herbivore") herb++;
       else carn++;
     }
-    // Prey safety net: top up if grazers crash.
-    if (herb < LIFE.reseedThreshold) {
-      for (let i = 0; i < 5; i++) this.spawnWild("herbivore");
+    const pop = this.creatures.length;
+
+    // Keep a grazer prey-base via immigration.
+    if (herb < LIFE.herbivoreFloor) {
+      const n = Math.min(4, LIFE.herbivoreFloor - herb);
+      for (let i = 0; i < n; i++) this.spawnWild("herbivore");
     }
-    // Predator floor: a lone prowler can't breed, so let migrants trickle in
-    // while there's enough prey to support them.
-    if (carn < LIFE.carnivoreFloor && herb > 20) {
+    // Modest prowler floor (a lone prowler can't breed), only with enough prey.
+    if (carn < LIFE.carnivoreFloor && herb > 18) {
       this.spawnWild("carnivore");
+    }
+    // A gentle trickle of fresh wild stock for diversity, up to a healthy
+    // target, biased toward grazers so the food web stays bottom-heavy.
+    if (pop < LIFE.wildPopTarget) {
+      this.spawnWild(this.rng.chance(0.85) ? "herbivore" : "carnivore");
     }
   }
 
