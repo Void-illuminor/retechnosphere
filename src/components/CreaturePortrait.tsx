@@ -7,9 +7,11 @@ interface Props {
   portrait: PortraitDTO;
   size: number;
   dead?: boolean;
+  /** Draw the checkerboard studio floor (for large hero portraits). */
+  scene?: boolean;
 }
 
-export default function CreaturePortrait({ portrait, size, dead }: Props) {
+export default function CreaturePortrait({ portrait, size, dead, scene }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -32,12 +34,12 @@ export default function CreaturePortrait({ portrait, size, dead }: Props) {
         sizeGene: portrait.sizeGene,
         vigor: 1,
       },
-      size * 0.54,
-      size * 0.46,
-      { size: size * 0.3 },
+      size * 0.5,
+      size * 0.44,
+      { size: size * 0.2, scene, viewW: size, viewH: size },
     );
     ctx.filter = "none";
-  }, [portrait, size, dead]);
+  }, [portrait, size, dead, scene]);
 
   return <canvas ref={ref} style={{ width: size, height: size, display: "block" }} />;
 }

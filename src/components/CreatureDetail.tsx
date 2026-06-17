@@ -92,7 +92,7 @@ export default function CreatureDetail({ id, onOpenCreature, onBack }: Props) {
 
       <div className="detail-top">
         <div className="panel detail-hero">
-          <CreaturePortrait portrait={c} size={200} dead={!c.alive} />
+          <CreaturePortrait portrait={c} size={200} dead={!c.alive} scene />
           <div className="detail-id">
             <div className="detail-name">{c.name}</div>
             <div className={`ctype ${carn ? "carn" : "herb"}`}>
