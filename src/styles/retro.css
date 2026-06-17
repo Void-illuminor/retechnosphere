@@ -687,6 +687,25 @@ body::after {
   font-size: 12px;
 }
 
+/* live 3D containers */
+.stage-3d {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  border-radius: 0 0 4px 4px;
+  background: radial-gradient(420px 300px at 50% 38%, #15324a 0%, #0a121d 72%);
+}
+.hero-3d {
+  width: 200px;
+  height: 200px;
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: radial-gradient(220px 160px at 45% 40%, #16324a 0%, #0a121d 72%);
+}
+
 /* ============================================================================
    Roster + creature dossier (original-style list/detail UI)
    ========================================================================== */

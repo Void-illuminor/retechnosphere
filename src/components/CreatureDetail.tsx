@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { CreatureDetail as Detail, CreatureSummaryDTO, api } from "../net/api";
 import { formatSimTime } from "../sim/events";
+import Creature3D from "./Creature3D";
 import CreaturePortrait from "./CreaturePortrait";
 import StatBars from "./StatBars";
 
@@ -92,7 +93,12 @@ export default function CreatureDetail({ id, onOpenCreature, onBack }: Props) {
 
       <div className="detail-top">
         <div className="panel detail-hero">
-          <CreaturePortrait portrait={c} size={200} dead={!c.alive} scene />
+          <div className="hero-3d">
+            <Creature3D
+              genome={{ diet: c.diet, parts: c.parts, hue: c.hue, accent: c.accent, sizeGene: c.sizeGene, vigor: 1 }}
+              dead={!c.alive}
+            />
+          </div>
           <div className="detail-id">
             <div className="detail-name">{c.name}</div>
             <div className={`ctype ${carn ? "carn" : "herb"}`}>

@@ -1,5 +1,6 @@
-/** Renders a static creature portrait to a canvas from its genome bits. */
+/** Static creature thumbnail — a single 3D render (falls back to 2D if no WebGL). */
 import { useEffect, useRef } from "react";
+import { getStudio } from "../render/creature3d";
 import { drawCreaturePortrait } from "../render/drawCreature";
 import type { PortraitDTO } from "../sim/wire";
 
@@ -7,7 +8,6 @@ interface Props {
   portrait: PortraitDTO;
   size: number;
   dead?: boolean;
-  /** Draw the checkerboard studio floor (for large hero portraits). */
   scene?: boolean;
 }
 
@@ -17,27 +17,42 @@ export default function CreaturePortrait({ portrait, size, dead, scene }: Props)
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(size * dpr);
-    canvas.height = Math.round(size * dpr);
     const ctx = canvas.getContext("2d")!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, size, size);
-    if (dead) ctx.filter = "grayscale(0.8) opacity(0.5)";
-    drawCreaturePortrait(
-      ctx,
-      {
-        diet: portrait.diet,
-        parts: portrait.parts,
-        hue: portrait.hue,
-        accent: portrait.accent,
-        sizeGene: portrait.sizeGene,
-        vigor: 1,
-      },
-      size * 0.56,
-      size * 0.47,
-      { size: size * 0.2, scene, viewW: size, viewH: size, detail: scene ? 2 : size >= 84 ? 1 : 0 },
-    );
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const px = Math.round(size * dpr);
+    canvas.width = px;
+    canvas.height = px;
+    const genome = {
+      diet: portrait.diet,
+      parts: portrait.parts,
+      hue: portrait.hue,
+      accent: portrait.accent,
+      sizeGene: portrait.sizeGene,
+      vigor: 1,
+    };
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, px, px);
+    if (dead) ctx.filter = "grayscale(0.85) opacity(0.6)";
+    let ok = false;
+    const studio = getStudio();
+    if (studio) {
+      try {
+        const gl = studio.render(genome, 0.5, px, px, !!scene);
+        ctx.drawImage(gl, 0, 0, px, px);
+        ok = true;
+      } catch {
+        ok = false;
+      }
+    }
+    if (!ok) {
+      drawCreaturePortrait(ctx, genome, px * 0.54, px * 0.47, {
+        size: px * 0.2,
+        scene,
+        viewW: px,
+        viewH: px,
+        detail: scene ? 2 : size >= 84 ? 1 : 0,
+      });
+    }
     ctx.filter = "none";
   }, [portrait, size, dead, scene]);
 

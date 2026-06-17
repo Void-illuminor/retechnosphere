@@ -8,7 +8,7 @@ import { MeInfo, ReleaseResult, api, tokenStore } from "../net/api";
 import { Diet, Genome, deriveStats, generateName } from "../sim/genome";
 import { CATEGORY_LABEL, PART_CATEGORIES, PartCategory, partsIn } from "../sim/parts";
 import { Rng } from "../sim/rng";
-import CreaturePreview from "./CreaturePreview";
+import Creature3D from "./Creature3D";
 import StatBars from "./StatBars";
 
 interface Props {
@@ -138,7 +138,9 @@ export default function Builder({ me, onReleased, onCancel, canCancel }: Props) 
               ⟳ Randomize
             </button>
           </div>
-          <CreaturePreview genome={genome} />
+          <div className="stage-3d">
+            <Creature3D genome={genome} />
+          </div>
           <div className="name-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
             <input
               value={name}
