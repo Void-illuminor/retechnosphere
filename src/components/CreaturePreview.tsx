@@ -37,9 +37,9 @@ export default function CreaturePreview({ genome }: Props) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
-      const size = Math.min(w, h) * 0.24;
-      const cx = w / 2;
-      const cy = h * 0.46 + Math.sin(t * 1.4) * 4;
+      const size = Math.min(w, h) * 0.23;
+      const cx = w * 0.54;
+      const cy = h * 0.47 + Math.sin(t * 1.4) * 4;
       drawCreaturePortrait(ctx, genomeRef.current, cx, cy, { size, scene: true, viewW: w, viewH: h });
 
       raf = requestAnimationFrame(loop);
