@@ -102,7 +102,8 @@ export default function Builder({ me, onReleased, onCancel, canCancel }: Props) 
           </div>
         </div>
 
-        <div className="panel col parts-panel">          <div className="titlebar">
+        <div className="panel col parts-panel">
+          <div className="titlebar">
             <span className="dot" /> 2 · Assemble the body
           </div>
           <div className="scroll">
